@@ -1,5 +1,7 @@
 # Smallbigint
 
+[![Docs.rs link](https://docs.rs/smallbigint/badge.svg)](https://docs.rs/smallbigint)
+
 A wrapper around `num_bigint::BigUint` and `num_bigint::BigInt` that
 stays out of the heap for small values.
 
