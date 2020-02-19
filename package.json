@@ -1,0 +1,14 @@
+{
+    "meta": [
+        "This file exists just to make commitizen (git cz) work.",
+        "There is no JavaScript in this project."
+    ],
+    "devDependencies": {
+        "cz-conventional-changelog": "^3.1.0"
+    },
+    "config": {
+        "commitizen": {
+            "path": "./node_modules/cz-conventional-changelog"
+        }
+    }
+}
