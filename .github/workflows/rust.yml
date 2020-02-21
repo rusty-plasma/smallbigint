@@ -15,3 +15,5 @@ jobs:
       run: cargo test --all-targets --all-features
     - name: Clippy
       run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::all -D clippy::cargo
+    - name: Check for correct formatting
+      run: cargo fmt -- --check --files-with-diff

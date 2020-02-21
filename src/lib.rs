@@ -15,7 +15,6 @@
 //! - Implement `num_bigint::{ToBigInt, ToBigUint}`
 //! - Unit tests. Currently there are none, although the code is sufficiently simple
 //!   that there is almost no place where bugs could hide.
-//! - Continuous integration.
 //! - Make this compile against rust stable.
 //!
 //! ## Other traits and methods still to be implemented:
