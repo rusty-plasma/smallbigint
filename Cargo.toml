@@ -6,6 +6,10 @@ description = "Big integer types that have a small on-stack representation for s
 edition = "2018"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rusty-plasma/smallbigint"
+readme = "README.md"
+
+categories = ["data-structures"]
+keywords = ["bigint", "integer", "number"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

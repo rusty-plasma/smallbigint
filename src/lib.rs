@@ -41,7 +41,6 @@
 use either::{Either, Left, Right};
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigUint};
 use num_traits::cast::*;
-use std;
 use std::borrow::Borrow;
 use std::borrow::Cow::{self, *};
 use std::convert::{From, Into, TryFrom, TryInto};
