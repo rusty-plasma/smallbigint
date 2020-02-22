@@ -9,8 +9,6 @@
 //!
 //! ## To do, and important:
 //!
-//! - Switch the "big integer" enum variant to a [`Box`], as [`BigInt`] and
-//!   [`BigUint`] are actually quite sizeable on the stack.
 //! - Implement `std::fmt::{Binary, LowerHex, Octal, UpperHex}` (easy?)
 //! - Implement `num_bigint::{ToBigInt, ToBigUint}`
 //! - Unit tests. Currently there are none, although the code is sufficiently simple
@@ -55,19 +53,19 @@ type uint = u32;
 type int = i32;
 
 #[derive(Clone, Debug)]
-pub struct Uint(Either<uint, BigUint>);
+pub struct Uint(Either<uint, Box<BigUint>>);
 #[derive(Clone, Debug)]
-pub struct Int(Either<int, BigInt>);
+pub struct Int(Either<int, Box<BigInt>>);
 
 impl Uint {
-    pub const fn zero() -> Self {
+    pub fn zero() -> Self {
         Self::small(0)
     }
-    pub const fn small(x: uint) -> Self {
+    pub fn small(x: uint) -> Self {
         Uint(Left(x))
     }
-    pub const fn big(v: BigUint) -> Self {
-        Uint(Right(v))
+    pub fn big(v: BigUint) -> Self {
+        Uint(Right(Box::new(v)))
     }
     /// A convenience function to get or convert to a [`BigUint`], without
     /// having to copy any heap-allocated data if we are already a `&BigUint`.
@@ -110,14 +108,14 @@ impl Uint {
 }
 
 impl Int {
-    pub const fn zero() -> Self {
+    pub fn zero() -> Self {
         Self::small(0)
     }
-    pub const fn small(x: int) -> Self {
+    pub fn small(x: int) -> Self {
         Int(Left(x))
     }
-    pub const fn big(v: BigInt) -> Self {
-        Int(Right(v))
+    pub fn big(v: BigInt) -> Self {
+        Int(Right(Box::new(v)))
     }
     /// A convenience function to get or convert to a [`BigInt`], without
     /// having to copy any heap-allocated data if we are already a `&BigInt`.
@@ -207,28 +205,28 @@ impl Display for Int {
 
 impl From<BigUint> for Uint {
     fn from(v: BigUint) -> Self {
-        Uint(Right(v))
+        Uint(Right(Box::new(v)))
     }
 }
 impl From<Uint> for BigUint {
     fn from(v: Uint) -> BigUint {
         match v.0 {
             Left(x) => x.into(),
-            Right(b) => b,
+            Right(b) => *b,
         }
     }
 }
 
 impl From<BigInt> for Int {
     fn from(v: BigInt) -> Self {
-        Int(Right(v))
+        Int(Right(Box::new(v)))
     }
 }
 impl From<Int> for BigInt {
     fn from(v: Int) -> BigInt {
         match v.0 {
             Left(x) => x.into(),
-            Right(b) => b,
+            Right(b) => *b,
         }
     }
 }
@@ -368,10 +366,10 @@ impl From<Uint> for Int {
                 if let Ok(x1) = x.try_into() {
                     Int(Left(x1))
                 } else {
-                    Int(Right(x.into()))
+                    Int(Right(Box::new(x.into())))
                 }
             }
-            Right(b) => Int(Right(b.into())),
+            Right(b) => Int(Right(Box::new((*b).into()))),
         }
     }
 }
@@ -388,10 +386,14 @@ impl TryFrom<Int> for Uint {
                 if let Ok(x1) = x.try_into() {
                     Ok(Uint(Left(x1)))
                 } else {
-                    Ok(Uint(Right(x.to_biguint().ok_or(IntIsNegativeError())?)))
+                    Ok(Uint(Right(Box::new(
+                        x.to_biguint().ok_or(IntIsNegativeError())?,
+                    ))))
                 }
             }
-            Right(x) => Ok(Uint(Right(x.to_biguint().ok_or(IntIsNegativeError())?))),
+            Right(x) => Ok(Uint(Right(Box::new(
+                x.to_biguint().ok_or(IntIsNegativeError())?,
+            )))),
         }
     }
 }
@@ -403,7 +405,7 @@ impl From<u128> for Uint {
         if let Ok(x) = x.try_into() {
             Uint(Left(x))
         } else {
-            Uint(Right(x.into()))
+            Uint(Right(Box::new(x.into())))
         }
     }
 }
@@ -413,9 +415,9 @@ impl TryFrom<i128> for Uint {
         if let Ok(x) = x.try_into() {
             Ok(Uint(Left(x)))
         } else {
-            Ok(Uint(Right(
+            Ok(Uint(Right(Box::new(
                 BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
-            )))
+            ))))
         }
     }
 }
@@ -424,7 +426,7 @@ impl From<u64> for Uint {
         if let Ok(x) = x.try_into() {
             Uint(Left(x))
         } else {
-            Uint(Right(x.into()))
+            Uint(Right(Box::new(x.into())))
         }
     }
 }
@@ -434,9 +436,9 @@ impl TryFrom<i64> for Uint {
         if let Ok(x) = x.try_into() {
             Ok(Uint(Left(x)))
         } else {
-            Ok(Uint(Right(
+            Ok(Uint(Right(Box::new(
                 BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
-            )))
+            ))))
         }
     }
 }
@@ -445,7 +447,7 @@ impl From<u32> for Uint {
         if let Ok(x) = x.try_into() {
             Uint(Left(x))
         } else {
-            Uint(Right(x.into()))
+            Uint(Right(Box::new(x.into())))
         }
     }
 }
@@ -455,9 +457,9 @@ impl TryFrom<i32> for Uint {
         if let Ok(x) = x.try_into() {
             Ok(Uint(Left(x)))
         } else {
-            Ok(Uint(Right(
+            Ok(Uint(Right(Box::new(
                 BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
-            )))
+            ))))
         }
     }
 }
@@ -467,42 +469,42 @@ impl FromPrimitive for Uint {
         if let Ok(x) = x.try_into() {
             Some(Uint(Left(x)))
         } else {
-            Some(Uint(Right(x.into())))
+            Some(Uint(Right(Box::new(x.into()))))
         }
     }
     fn from_i128(x: i128) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Uint(Left(x)))
         } else {
-            Some(Uint(Right(BigInt::from(x).to_biguint()?)))
+            Some(Uint(Right(Box::new(BigInt::from(x).to_biguint()?))))
         }
     }
     fn from_u64(x: u64) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Uint(Left(x)))
         } else {
-            Some(Uint(Right(x.into())))
+            Some(Uint(Right(Box::new(x.into()))))
         }
     }
     fn from_i64(x: i64) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Uint(Left(x)))
         } else {
-            Some(Uint(Right(BigInt::from(x).to_biguint()?)))
+            Some(Uint(Right(Box::new(BigInt::from(x).to_biguint()?))))
         }
     }
     fn from_u32(x: u32) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Uint(Left(x)))
         } else {
-            Some(Uint(Right(x.into())))
+            Some(Uint(Right(Box::new(x.into()))))
         }
     }
     fn from_i32(x: i32) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Uint(Left(x)))
         } else {
-            Some(Uint(Right(BigInt::from(x).to_biguint()?)))
+            Some(Uint(Right(Box::new(BigInt::from(x).to_biguint()?))))
         }
     }
 }
@@ -512,7 +514,7 @@ impl From<u128> for Int {
         if let Ok(x) = x.try_into() {
             Int(Left(x))
         } else {
-            Int(Right(x.into()))
+            Int(Right(Box::new(x.into())))
         }
     }
 }
@@ -521,7 +523,7 @@ impl From<i128> for Int {
         if let Ok(x) = x.try_into() {
             Int(Left(x))
         } else {
-            Int(Right(x.into()))
+            Int(Right(Box::new(x.into())))
         }
     }
 }
@@ -530,7 +532,7 @@ impl From<u64> for Int {
         if let Ok(x) = x.try_into() {
             Int(Left(x))
         } else {
-            Int(Right(x.into()))
+            Int(Right(Box::new(x.into())))
         }
     }
 }
@@ -539,7 +541,7 @@ impl From<i64> for Int {
         if let Ok(x) = x.try_into() {
             Int(Left(x))
         } else {
-            Int(Right(x.into()))
+            Int(Right(Box::new(x.into())))
         }
     }
 }
@@ -548,7 +550,7 @@ impl From<u32> for Int {
         if let Ok(x) = x.try_into() {
             Int(Left(x))
         } else {
-            Int(Right(x.into()))
+            Int(Right(Box::new(x.into())))
         }
     }
 }
@@ -557,7 +559,7 @@ impl From<i32> for Int {
         if let Ok(x) = x.try_into() {
             Int(Left(x))
         } else {
-            Int(Right(x.into()))
+            Int(Right(Box::new(x.into())))
         }
     }
 }
@@ -567,42 +569,42 @@ impl FromPrimitive for Int {
         if let Ok(x) = x.try_into() {
             Some(Int(Left(x)))
         } else {
-            Some(Int(Right(x.into())))
+            Some(Int(Right(Box::new(x.into()))))
         }
     }
     fn from_i128(x: i128) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Int(Left(x)))
         } else {
-            Some(Int(Right(x.into())))
+            Some(Int(Right(Box::new(x.into()))))
         }
     }
     fn from_u64(x: u64) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Int(Left(x)))
         } else {
-            Some(Int(Right(x.into())))
+            Some(Int(Right(Box::new(x.into()))))
         }
     }
     fn from_i64(x: i64) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Int(Left(x)))
         } else {
-            Some(Int(Right(x.into())))
+            Some(Int(Right(Box::new(x.into()))))
         }
     }
     fn from_u32(x: u32) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Int(Left(x)))
         } else {
-            Some(Int(Right(x.into())))
+            Some(Int(Right(Box::new(x.into()))))
         }
     }
     fn from_i32(x: i32) -> Option<Self> {
         if let Ok(x) = x.try_into() {
             Some(Int(Left(x)))
         } else {
-            Some(Int(Right(x.into())))
+            Some(Int(Right(Box::new(x.into()))))
         }
     }
 }
