@@ -13,13 +13,10 @@ yet. Patches are welcome!
 
 ## To do, and important:
 
-- Switch the "big integer" enum variant to a `Box`, as `BigInt` and
-  `BigUint` are actually quite sizeable on the stack.
 - Implement `std::fmt::{Binary, LowerHex, Octal, UpperHex}` (easy?)
 - Implement `num_bigint::{ToBigInt, ToBigUint}`
 - Unit tests. Currently there are none, although the code is sufficiently simple
   that there is almost no place where bugs could hide.
-- Continuous integration.
 - Make this compile against rust stable.
 
 ## Other traits and methods still to be implemented:
@@ -41,3 +38,20 @@ I probably also want conversions from/to 16-bit and 8-bit types.
 ## Not done and seems hard:
 
 - `num_traits::pow::Pow`
+
+# License
+
+This project is licensed under either of
+
+ * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
+   http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or
+   http://opensource.org/licenses/MIT)
+
+at your option.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in toml-rs by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
