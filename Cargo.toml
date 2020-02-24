@@ -1,6 +1,6 @@
 [package]
 name = "smallbigint"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Bram Geron <bram@bram.xyz>"]
 description = "Big integer types that have a small on-stack representation for small values. Uses num-bigint internally."
 edition = "2018"
