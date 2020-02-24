@@ -4,7 +4,7 @@
 //! In the current implementation, we go to the heap for anything that
 //! doesn't fit in 32 bits.
 //!
-//! This crate is already has a lot of relevant methods, but it is not really complete
+//! This crate already has a lot of relevant methods, but it is not really complete
 //! yet. Patches are welcome!
 //!
 //! ## To do, and important:

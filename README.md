@@ -1,6 +1,7 @@
 # Smallbigint
 
 [![Docs.rs link](https://docs.rs/smallbigint/badge.svg)](https://docs.rs/smallbigint)
+[![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 
 A wrapper around `num_bigint::BigUint` and `num_bigint::BigInt` that
 stays out of the heap for small values.
@@ -8,7 +9,7 @@ stays out of the heap for small values.
 In the current implementation, we go to the heap for anything that
 doesn't fit in 32 bits.
 
-This crate is already has a lot of relevant methods, but it is not really complete
+This crate already has a lot of relevant methods, but it is not really complete
 yet. Patches are welcome!
 
 ## To do, and important:
