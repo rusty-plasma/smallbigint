@@ -24,17 +24,15 @@ yet. Patches are welcome!
 
 - Bit operations
 - `num_traits::ops::checked` traits
-- `num_integer::Integer`
 - `num_traits::Num` (easy?)
 - `num_traits::One` (easy?)
-- `std::iter::Product`
-- `num_integer::Roots`
 - `num_traits::Signed`
-- `std::iter::Sum`
 - `num_traits::Unsigned`
+- `num_integer::Integer`
+- `num_integer::Roots`
+- `std::iter::Product`
+- `std::iter::Sum`
 - Other methods implemented directly on BigInt, BigUint
-
-I probably also want conversions from/to 16-bit and 8-bit types.
 
 ## Not done and seems hard:
 

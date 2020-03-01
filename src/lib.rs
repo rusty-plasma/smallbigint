@@ -19,17 +19,15 @@
 //!
 //! - Bit operations
 //! - [`num_traits::ops::checked`] traits
-//! - [`num_integer::Integer`]
 //! - [`num_traits::Num`] (easy?)
 //! - [`num_traits::One`] (easy?)
-//! - [`std::iter::Product`]
-//! - [`num_integer::Roots`]
 //! - [`num_traits::Signed`]
-//! - [`std::iter::Sum`]
 //! - [`num_traits::Unsigned`]
+//! - [`num_integer::Integer`]
+//! - [`num_integer::Roots`]
+//! - [`std::iter::Product`]
+//! - [`std::iter::Sum`]
 //! - Other methods implemented directly on BigInt, BigUint
-//!
-//! I probably also want conversions from/to 16-bit and 8-bit types.
 //!
 //! ## Not done and seems hard:
 //!
@@ -37,13 +35,15 @@
 
 use either::{Either, Left, Right};
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigUint};
-use num_traits::cast::*;
+use num_traits::cast::{FromPrimitive, ToPrimitive};
 use std::borrow::Borrow;
-use std::borrow::Cow::{self, *};
+use std::borrow::Cow::{self, Borrowed, Owned};
 use std::convert::{From, Into, TryFrom, TryInto};
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
-use std::ops::*;
+use std::ops::{
+    Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
+};
 
 use std::str::FromStr;
 
@@ -76,6 +76,8 @@ impl Uint {
     /// automatically figure out the lifetimes.
     ///
     /// ```rust
+    /// # use smallbigint::Uint; use num_bigint::BigUint;
+    /// # use std::borrow::Borrow;
     /// # let x = Uint::small(42);
     /// let x1 = x.cow_big();
     /// let x2 : &BigUint = x1.borrow();
@@ -126,6 +128,8 @@ impl Int {
     /// automatically figure out the lifetimes.
     ///
     /// ```rust
+    /// # use smallbigint::Int; use num_bigint::BigInt;
+    /// # use std::borrow::Borrow;
     /// # let x = Int::small(42);
     /// let x1 = x.cow_big();
     /// let x2 : &BigInt = x1.borrow();
