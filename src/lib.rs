@@ -43,7 +43,7 @@ use std::borrow::Borrow;
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::cmp::Ordering;
 use std::convert::{From, Into, TryFrom, TryInto};
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 use std::ops::{
     Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
@@ -60,9 +60,9 @@ type uint = u32;
 #[allow(non_camel_case_types)]
 type int = i32;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Uint(Either<uint, Box<BigUint>>);
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Int(Either<int, Box<BigInt>>);
 
 impl Uint {
@@ -214,6 +214,20 @@ impl Display for Int {
         }
     }
 }
+
+impl Debug for Uint {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
+impl Debug for Int {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
+
 
 impl From<BigUint> for Uint {
     fn from(v: BigUint) -> Self {
