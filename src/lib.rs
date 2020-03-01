@@ -970,18 +970,12 @@ macro_rules! trait_partialeq {
             fn eq(&self, other: &$basetype) -> bool {
                 ToGeneric::<$basetype>::to_generic(self).map_or(false, |x| x.eq(other))
             }
-            fn ne(&self, other: &$basetype) -> bool {
-                ToGeneric::<$basetype>::to_generic(self).map_or(false, |x| x.ne(other))
-            }
         }
 
         // The other way
         impl PartialEq<$type> for $basetype {
             fn eq(&self, other: &$type) -> bool {
                 ToGeneric::<$basetype>::to_generic(other).map_or(false, |x| x.eq(self))
-            }
-            fn ne(&self, other: &$type) -> bool {
-                ToGeneric::<$basetype>::to_generic(other).map_or(false, |x| x.ne(self))
             }
         }
     };
