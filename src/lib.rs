@@ -58,10 +58,10 @@ pub struct Uint(Either<uint, Box<BigUint>>);
 pub struct Int(Either<int, Box<BigInt>>);
 
 impl Uint {
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         Self::small(0)
     }
-    pub fn small(x: uint) -> Self {
+    pub const fn small(x: uint) -> Self {
         Uint(Left(x))
     }
     pub fn big(v: BigUint) -> Self {
@@ -108,10 +108,10 @@ impl Uint {
 }
 
 impl Int {
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         Self::small(0)
     }
-    pub fn small(x: int) -> Self {
+    pub const fn small(x: int) -> Self {
         Int(Left(x))
     }
     pub fn big(v: BigInt) -> Self {
