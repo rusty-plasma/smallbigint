@@ -7,6 +7,9 @@
 //! This crate already has a lot of relevant methods, but it is not really complete
 //! yet. Patches are welcome!
 //!
+//! Care has usually been taken to avoid allocation in the methods here, but not in
+//! all cases.
+//!
 //! ## To do, and important:
 //!
 //! - Implement `std::fmt::{Binary, LowerHex, Octal, UpperHex}` (easy?)
@@ -38,6 +41,7 @@ use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigUint};
 use num_traits::cast::{FromPrimitive, ToPrimitive};
 use std::borrow::Borrow;
 use std::borrow::Cow::{self, Borrowed, Owned};
+use std::cmp::Ordering;
 use std::convert::{From, Into, TryFrom, TryInto};
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
@@ -315,7 +319,47 @@ impl PartialOrd<Uint> for Uint {
     }
 }
 
+impl Ord for Int {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if let (Left(x), Left(y)) = (&self.0, &other.0) {
+            x.cmp(y)
+        } else {
+            let self1 = self.cow_big();
+            let self2: &BigInt = self1.borrow();
+            let other1 = other.cow_big();
+            let other2: &BigInt = other1.borrow();
+            self2.borrow().cmp(other2.borrow())
+        }
+    }
+}
+
+impl PartialOrd<Int> for Int {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if let (Left(x), Left(y)) = (&self.0, &other.0) {
+            x.partial_cmp(y)
+        } else {
+            let self1 = self.cow_big();
+            let self2: &BigInt = self1.borrow();
+            let other1 = other.cow_big();
+            let other2: &BigInt = other1.borrow();
+            self2.borrow().partial_cmp(other2.borrow())
+        }
+    }
+}
+
 // -- Basic stuff between both same and different signedness --
+
+impl PartialOrd<Uint> for Int {
+    fn partial_cmp(&self, other: &Uint) -> Option<std::cmp::Ordering> {
+        self.partial_cmp(&Int::from(other.clone()))
+    }
+}
+
+impl PartialOrd<Int> for Uint {
+    fn partial_cmp(&self, other: &Int) -> Option<std::cmp::Ordering> {
+        Int::from(self.clone()).partial_cmp(other)
+    }
+}
 
 impl PartialEq<Uint> for Uint {
     fn eq(&self, other: &Self) -> bool {
@@ -472,6 +516,72 @@ impl TryFrom<i32> for Uint {
     }
 }
 
+impl From<u16> for Uint {
+    fn from(x: u16) -> Self {
+        if let Ok(x) = x.try_into() {
+            Uint(Left(x))
+        } else {
+            Uint(Right(Box::new(x.into())))
+        }
+    }
+}
+impl TryFrom<i16> for Uint {
+    type Error = IntIsNegativeError;
+    fn try_from(x: i16) -> Result<Self, Self::Error> {
+        if let Ok(x) = x.try_into() {
+            Ok(Uint(Left(x)))
+        } else {
+            Ok(Uint(Right(Box::new(
+                BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
+            ))))
+        }
+    }
+}
+
+impl From<u8> for Uint {
+    fn from(x: u8) -> Self {
+        if let Ok(x) = x.try_into() {
+            Uint(Left(x))
+        } else {
+            Uint(Right(Box::new(x.into())))
+        }
+    }
+}
+impl TryFrom<i8> for Uint {
+    type Error = IntIsNegativeError;
+    fn try_from(x: i8) -> Result<Self, Self::Error> {
+        if let Ok(x) = x.try_into() {
+            Ok(Uint(Left(x)))
+        } else {
+            Ok(Uint(Right(Box::new(
+                BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
+            ))))
+        }
+    }
+}
+
+impl From<usize> for Uint {
+    fn from(x: usize) -> Self {
+        if let Ok(x) = x.try_into() {
+            Uint(Left(x))
+        } else {
+            Uint(Right(Box::new(x.into())))
+        }
+    }
+}
+impl TryFrom<isize> for Uint {
+    type Error = IntIsNegativeError;
+    fn try_from(x: isize) -> Result<Self, Self::Error> {
+        if let Ok(x) = x.try_into() {
+            Ok(Uint(Left(x)))
+        } else {
+            Ok(Uint(Right(Box::new(
+                BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
+            ))))
+        }
+    }
+}
+
 impl FromPrimitive for Uint {
     fn from_u128(x: u128) -> Option<Self> {
         if let Ok(x) = x.try_into() {
@@ -564,6 +674,63 @@ impl From<u32> for Int {
 }
 impl From<i32> for Int {
     fn from(x: i32) -> Self {
+        if let Ok(x) = x.try_into() {
+            Int(Left(x))
+        } else {
+            Int(Right(Box::new(x.into())))
+        }
+    }
+}
+
+impl From<u16> for Int {
+    fn from(x: u16) -> Self {
+        if let Ok(x) = x.try_into() {
+            Int(Left(x))
+        } else {
+            Int(Right(Box::new(x.into())))
+        }
+    }
+}
+impl From<i16> for Int {
+    fn from(x: i16) -> Self {
+        if let Ok(x) = x.try_into() {
+            Int(Left(x))
+        } else {
+            Int(Right(Box::new(x.into())))
+        }
+    }
+}
+
+impl From<u8> for Int {
+    fn from(x: u8) -> Self {
+        if let Ok(x) = x.try_into() {
+            Int(Left(x))
+        } else {
+            Int(Right(Box::new(x.into())))
+        }
+    }
+}
+impl From<i8> for Int {
+    fn from(x: i8) -> Self {
+        if let Ok(x) = x.try_into() {
+            Int(Left(x))
+        } else {
+            Int(Right(Box::new(x.into())))
+        }
+    }
+}
+
+impl From<usize> for Int {
+    fn from(x: usize) -> Self {
+        if let Ok(x) = x.try_into() {
+            Int(Left(x))
+        } else {
+            Int(Right(Box::new(x.into())))
+        }
+    }
+}
+impl From<isize> for Int {
+    fn from(x: isize) -> Self {
         if let Ok(x) = x.try_into() {
             Int(Left(x))
         } else {
@@ -986,16 +1153,59 @@ call_with_all_unsigned_base_types!(trait_partialeq, Int);
 call_with_all_signed_base_types!(trait_partialeq, Uint);
 call_with_all_signed_base_types!(trait_partialeq, Int);
 
+macro_rules! trait_partialord_straight {
+    ($type:tt $basetype:tt) => {
+        // One way
+        impl PartialOrd<$basetype> for $type {
+            fn partial_cmp(&self, other: &$basetype) -> Option<Ordering> {
+                // First, try to do it on the base type
+                match ToGeneric::<$basetype>::to_generic(self) {
+                    Some(x) => x.partial_cmp(other),
+                    None => {
+                        // If that fails, then do it on our type.
+                        match $type::try_from(other.clone()) {
+                            Ok(other2) => self.partial_cmp(&other2),
+                            Err(_) => {
+                                // Size is never an issue for TryFrom. This can only
+                                // happen because we're trying to convert a negative
+                                // number to unsigned.
+                                Some(Ordering::Greater)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // The other way
+        impl PartialOrd<$type> for $basetype {
+            fn partial_cmp(&self, other: &$type) -> Option<Ordering> {
+                other.partial_cmp(self).map(|ord| ord.reverse())
+            }
+        }
+    };
+}
+
+call_with_all_unsigned_base_types!(trait_partialord_straight, Uint);
+call_with_all_unsigned_base_types!(trait_partialord_straight, Int);
+call_with_all_signed_base_types!(trait_partialord_straight, Uint);
+call_with_all_signed_base_types!(trait_partialord_straight, Int);
+
 #[cfg(test)]
 mod test {
+    #![allow(clippy::redundant_clone)]
     use super::*;
     #[test]
-    fn test_1() {
+    fn test_unsigned() {
         let eleven = Uint::small(11);
         assert_eq!(eleven, 11u8);
         assert_ne!(eleven, 10u8);
         assert_eq!(11u8, eleven);
         assert_ne!(10u8, eleven);
+        assert_eq!(eleven, 11i8);
+        assert_ne!(eleven, 10i8);
+        assert_eq!(11i8, eleven);
+        assert_ne!(10i8, eleven);
         assert!(eleven.0.is_left());
         assert!(eleven.clone().0.is_left());
         assert!(eleven.clone().normalize().0.is_left());
@@ -1013,6 +1223,48 @@ mod test {
             * &eleven;
         assert!(eleven_to_the_eleven.0.is_right());
         assert!(eleven_to_the_eleven.clone().0.is_right());
-        assert!(eleven_to_the_eleven.normalize().0.is_right());
+        assert!(eleven_to_the_eleven.clone().normalize().0.is_right());
+        assert!(eleven < eleven_to_the_eleven);
+        assert!(11u8 < eleven_to_the_eleven);
+        assert!(11i8 < eleven_to_the_eleven);
+    }
+    #[test]
+    fn test_signed() {
+        let eleven = Int::small(11);
+        assert_eq!(eleven, 11u8);
+        assert_ne!(eleven, 10u8);
+        assert_eq!(11u8, eleven);
+        assert_ne!(10u8, eleven);
+        assert_eq!(eleven, 11i8);
+        assert_ne!(eleven, 10i8);
+        assert_eq!(11i8, eleven);
+        assert_ne!(10i8, eleven);
+        assert!(eleven.0.is_left());
+        assert!(eleven.clone().0.is_left());
+        assert!(eleven.clone().normalize().0.is_left());
+
+        let eleven_to_the_eleven = &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven;
+        assert!(eleven_to_the_eleven.0.is_right());
+        assert!(eleven_to_the_eleven.clone().0.is_right());
+        assert!(eleven_to_the_eleven.clone().normalize().0.is_right());
+        assert!(eleven < eleven_to_the_eleven);
+        assert!(-eleven.clone() < eleven_to_the_eleven);
+        assert!(-eleven_to_the_eleven.clone() < eleven);
+        assert!(-eleven_to_the_eleven.clone() < -eleven.clone());
+        assert!(11u8 < eleven_to_the_eleven);
+        assert!(11i8 < eleven_to_the_eleven);
+        assert!(-11i8 < eleven_to_the_eleven);
+        assert!(-eleven_to_the_eleven.clone() < 11i8);
+        assert!(-eleven_to_the_eleven.clone() < -11i8);
     }
 }
