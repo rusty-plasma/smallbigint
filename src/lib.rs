@@ -47,6 +47,10 @@ use std::ops::{
 
 use std::str::FromStr;
 
+mod to_primitive_generic;
+// Don't want to commit to exporting this yet
+use to_primitive_generic::ToGeneric;
+
 #[allow(non_camel_case_types)]
 type uint = u32;
 #[allow(non_camel_case_types)]
@@ -958,3 +962,63 @@ macro_rules! trait_sub_mut {
 
 call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Int, int, BigInt, signed}
 call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Uint, uint, BigUint, unsigned}
+
+macro_rules! trait_partialeq {
+    ($type:tt $basetype:ty) => {
+        // One way
+        impl PartialEq<$basetype> for $type {
+            fn eq(&self, other: &$basetype) -> bool {
+                ToGeneric::<$basetype>::to_generic(self).map_or(false, |x| x.eq(other))
+            }
+            fn ne(&self, other: &$basetype) -> bool {
+                ToGeneric::<$basetype>::to_generic(self).map_or(false, |x| x.ne(other))
+            }
+        }
+
+        // The other way
+        impl PartialEq<$type> for $basetype {
+            fn eq(&self, other: &$type) -> bool {
+                ToGeneric::<$basetype>::to_generic(other).map_or(false, |x| x.eq(self))
+            }
+            fn ne(&self, other: &$type) -> bool {
+                ToGeneric::<$basetype>::to_generic(other).map_or(false, |x| x.ne(self))
+            }
+        }
+    };
+}
+
+call_with_all_unsigned_base_types!(trait_partialeq, Uint);
+call_with_all_unsigned_base_types!(trait_partialeq, Int);
+call_with_all_signed_base_types!(trait_partialeq, Uint);
+call_with_all_signed_base_types!(trait_partialeq, Int);
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_1() {
+        let eleven = Uint::small(11);
+        assert_eq!(eleven, 11u8);
+        assert_ne!(eleven, 10u8);
+        assert_eq!(11u8, eleven);
+        assert_ne!(10u8, eleven);
+        assert!(eleven.0.is_left());
+        assert!(eleven.clone().0.is_left());
+        assert!(eleven.clone().normalize().0.is_left());
+
+        let eleven_to_the_eleven = &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven
+            * &eleven;
+        assert!(eleven_to_the_eleven.0.is_right());
+        assert!(eleven_to_the_eleven.clone().0.is_right());
+        assert!(eleven_to_the_eleven.normalize().0.is_right());
+    }
+}
