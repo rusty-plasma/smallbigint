@@ -115,6 +115,24 @@ impl Uint {
             }
         }
     }
+    /// Like `normalize`, but borrows instead.
+    #[allow(clippy::needless_return)]
+    pub fn normalize_ref(&self) -> Cow<Self> {
+        if let Right(ref b) = self.0 {
+            if let Some(x) = b.to_u32() {
+                return Owned(Self(Left(x)));
+            }
+        }
+        return Borrowed(self);
+    }
+    #[allow(dead_code)]
+    fn is_stored_as_big(&self) -> bool {
+        if let Right(_) = self.0 {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Int {
@@ -165,6 +183,24 @@ impl Int {
                     Self(Right(b))
                 }
             }
+        }
+    }
+    /// Like `normalize`, but borrows instead.
+    #[allow(clippy::needless_return)]
+    pub fn normalize_ref(&self) -> Cow<Self> {
+        if let Right(ref b) = self.0 {
+            if let Some(x) = b.to_i32() {
+                return Owned(Self(Left(x)));
+            }
+        }
+        return Borrowed(self);
+    }
+    #[allow(dead_code)]
+    fn is_stored_as_big(&self) -> bool {
+        if let Right(_) = self.0 {
+            true
+        } else {
+            false
         }
     }
 }
@@ -271,7 +307,7 @@ impl FromStr for Int {
 
 impl Hash for Uint {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        match &self.0 {
+        match &self.normalize_ref().0 {
             Left(x) => x.hash(state),
             Right(b) => b.hash(state),
         }
@@ -280,7 +316,7 @@ impl Hash for Uint {
 
 impl Hash for Int {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        match &self.0 {
+        match &self.normalize_ref().0 {
             Left(x) => x.hash(state),
             Right(b) => b.hash(state),
         }
@@ -439,6 +475,7 @@ impl From<Uint> for Int {
 }
 
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct IntIsNegativeError();
 
 impl TryFrom<Int> for Uint {
@@ -1205,7 +1242,7 @@ call_with_all_signed_base_types!(trait_partialord_straight, Int);
 
 #[cfg(test)]
 mod test {
-    #![allow(clippy::redundant_clone)]
+    #![allow(clippy::redundant_clone, clippy::cognitive_complexity)]
     use super::*;
     #[test]
     fn test_unsigned() {
@@ -1222,7 +1259,7 @@ mod test {
         assert!(eleven.clone().0.is_left());
         assert!(eleven.clone().normalize().0.is_left());
 
-        let eleven_to_the_eleven = &eleven
+        let eleven_pow11 = &eleven
             * &eleven
             * &eleven
             * &eleven
@@ -1233,12 +1270,25 @@ mod test {
             * &eleven
             * &eleven
             * &eleven;
-        assert!(eleven_to_the_eleven.0.is_right());
-        assert!(eleven_to_the_eleven.clone().0.is_right());
-        assert!(eleven_to_the_eleven.clone().normalize().0.is_right());
-        assert!(eleven < eleven_to_the_eleven);
-        assert!(11u8 < eleven_to_the_eleven);
-        assert!(11i8 < eleven_to_the_eleven);
+        assert!(eleven_pow11.0.is_right());
+        assert!(eleven_pow11.clone().0.is_right());
+        assert!(eleven_pow11.clone().normalize().0.is_right());
+        assert!(eleven < eleven_pow11);
+        assert!(11u8 < eleven_pow11);
+        assert!(11i8 < eleven_pow11);
+        let eleven_big = Uint::big(BigUint::from(11u8));
+        let eleven_big_norm = eleven_big.clone().normalize();
+        let eleven_big_norm_ref = eleven_big.normalize_ref();
+        assert_eq!(eleven, eleven_big);
+        assert_eq!(eleven, eleven_big_norm);
+        assert_eq!(eleven, *eleven_big_norm_ref);
+        assert_eq!(eleven_big.is_stored_as_big(), true);
+        assert_eq!(eleven_big_norm.is_stored_as_big(), false);
+        assert_eq!(eleven_big_norm_ref.is_stored_as_big(), false);
+        let eleven_pow11_norm = eleven_pow11.clone().normalize();
+        let eleven_pow11_norm_ref = eleven_pow11.normalize_ref();
+        assert_eq!(eleven_pow11, eleven_pow11_norm);
+        assert_eq!(eleven_pow11, *eleven_pow11_norm_ref);
     }
     #[test]
     fn test_signed() {
@@ -1255,7 +1305,7 @@ mod test {
         assert!(eleven.clone().0.is_left());
         assert!(eleven.clone().normalize().0.is_left());
 
-        let eleven_to_the_eleven = &eleven
+        let eleven_pow11 = &eleven
             * &eleven
             * &eleven
             * &eleven
@@ -1266,17 +1316,30 @@ mod test {
             * &eleven
             * &eleven
             * &eleven;
-        assert!(eleven_to_the_eleven.0.is_right());
-        assert!(eleven_to_the_eleven.clone().0.is_right());
-        assert!(eleven_to_the_eleven.clone().normalize().0.is_right());
-        assert!(eleven < eleven_to_the_eleven);
-        assert!(-eleven.clone() < eleven_to_the_eleven);
-        assert!(-eleven_to_the_eleven.clone() < eleven);
-        assert!(-eleven_to_the_eleven.clone() < -eleven.clone());
-        assert!(11u8 < eleven_to_the_eleven);
-        assert!(11i8 < eleven_to_the_eleven);
-        assert!(-11i8 < eleven_to_the_eleven);
-        assert!(-eleven_to_the_eleven.clone() < 11i8);
-        assert!(-eleven_to_the_eleven.clone() < -11i8);
+        assert!(eleven_pow11.0.is_right());
+        assert!(eleven_pow11.clone().0.is_right());
+        assert!(eleven_pow11.clone().normalize().0.is_right());
+        assert!(eleven < eleven_pow11);
+        assert!(-eleven.clone() < eleven_pow11);
+        assert!(-eleven_pow11.clone() < eleven);
+        assert!(-eleven_pow11.clone() < -eleven.clone());
+        assert!(11u8 < eleven_pow11);
+        assert!(11i8 < eleven_pow11);
+        assert!(-11i8 < eleven_pow11);
+        assert!(-eleven_pow11.clone() < 11i8);
+        assert!(-eleven_pow11.clone() < -11i8);
+        let eleven_big = Int::big(BigInt::from(11i8));
+        let eleven_big_norm = eleven_big.clone().normalize();
+        let eleven_big_norm_ref = eleven_big.normalize_ref();
+        assert_eq!(eleven, eleven_big);
+        assert_eq!(eleven, eleven_big_norm);
+        assert_eq!(eleven, *eleven_big_norm_ref);
+        assert_eq!(eleven_big.is_stored_as_big(), true);
+        assert_eq!(eleven_big_norm.is_stored_as_big(), false);
+        assert_eq!(eleven_big_norm_ref.is_stored_as_big(), false);
+        let eleven_pow11_norm = eleven_pow11.clone().normalize();
+        let eleven_pow11_norm_ref = eleven_pow11.normalize_ref();
+        assert_eq!(eleven_pow11, eleven_pow11_norm);
+        assert_eq!(eleven_pow11, *eleven_pow11_norm_ref);
     }
 }
