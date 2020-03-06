@@ -17,3 +17,5 @@ jobs:
       run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::all -D clippy::cargo
     - name: Check for correct formatting
       run: cargo fmt -- --check --files-with-diff
+    - name: Cargo audit
+      run: bash -c 'which cargo-audit || cargo install cargo-audit; cargo audit --deny-warnings'
