@@ -227,8 +227,6 @@ impl Debug for Int {
     }
 }
 
-
-
 impl From<BigUint> for Uint {
     fn from(v: BigUint) -> Self {
         Uint(Right(Box::new(v)))
