@@ -459,9 +459,10 @@ impl Eq for Int {}
 
 // -- Basic stuff between different signedness --
 
-impl From<Uint> for Int {
-    fn from(v: Uint) -> Self {
-        match v.0 {
+impl Uint {
+    /// Convert to [`Int`].
+    pub fn into_int(self) -> Int {
+        match self.0 {
             Left(x) => {
                 if let Ok(x1) = x.try_into() {
                     Int(Left(x1))
@@ -473,29 +474,38 @@ impl From<Uint> for Int {
         }
     }
 }
+/// An alias for `.into_uint()`.
+impl From<Uint> for Int {
+    fn from(v: Uint) -> Self {
+        v.into_int()
+    }
+}
 
+impl Int {
+    /// Convert to [`Uint`] if nonnegative, otherwise None.
+    pub fn into_uint(self) -> Option<Uint> {
+        match self.0 {
+            Left(x) => {
+                if let Ok(x1) = x.try_into() {
+                    Some(Uint(Left(x1)))
+                } else {
+                    Some(Uint(Right(Box::new(x.to_biguint()?))))
+                }
+            }
+            Right(x) => Some(Uint(Right(Box::new(x.to_biguint()?)))),
+        }
+    }
+}
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct IntIsNegativeError();
 
+/// An alias for `.into_int()`.
 impl TryFrom<Int> for Uint {
     type Error = IntIsNegativeError;
     /// Fails on negative numbers.
     fn try_from(v: Int) -> Result<Self, Self::Error> {
-        match v.0 {
-            Left(x) => {
-                if let Ok(x1) = x.try_into() {
-                    Ok(Uint(Left(x1)))
-                } else {
-                    Ok(Uint(Right(Box::new(
-                        x.to_biguint().ok_or(IntIsNegativeError())?,
-                    ))))
-                }
-            }
-            Right(x) => Ok(Uint(Right(Box::new(
-                x.to_biguint().ok_or(IntIsNegativeError())?,
-            )))),
-        }
+        v.into_uint().ok_or(IntIsNegativeError())
     }
 }
 
