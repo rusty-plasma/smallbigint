@@ -16,9 +16,6 @@ yet. Patches are welcome!
 
 - Implement `std::fmt::{Binary, LowerHex, Octal, UpperHex}` (easy?)
 - Implement `num_bigint::{ToBigInt, ToBigUint}`
-- Unit tests. Currently there are none, although the code is sufficiently simple
-  that there is almost no place where bugs could hide.
-- Make this compile against rust stable.
 
 ## Other traits and methods still to be implemented:
 
