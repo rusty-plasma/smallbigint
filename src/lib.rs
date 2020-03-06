@@ -934,7 +934,7 @@ macro_rules! call_with_all_unsigned_base_types {
 }
 
 macro_rules! call_with_ref_permutations {
-    ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt, signed) => {
+    ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt, both signed and unsigned) => {
         call_with_ref_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
         call_with_all_signed_base_types!{
             call_with_ref_permutations,
@@ -945,7 +945,7 @@ macro_rules! call_with_ref_permutations {
             $macroname_value, $macroname_mut, $type, $basetype, $bigtype, base type
         }
     };
-    ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt, unsigned) => {
+    ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt, only unsigned) => {
         call_with_ref_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
         call_with_all_unsigned_base_types!{
             call_with_ref_permutations,
@@ -1040,8 +1040,8 @@ macro_rules! trait_add_mut {
     };
 }
 
-call_with_ref_permutations! {trait_add_value, trait_add_mut, Int, int, BigInt, signed}
-call_with_ref_permutations! {trait_add_value, trait_add_mut, Uint, uint, BigUint, unsigned}
+call_with_ref_permutations! {trait_add_value, trait_add_mut, Int, int, BigInt, both signed and unsigned}
+call_with_ref_permutations! {trait_add_value, trait_add_mut, Uint, uint, BigUint, only unsigned}
 
 macro_rules! trait_div_value {
     ($type:tt, $basetype:ty, $bigtype:ty, $selfvar:tt, $othvar:ident,
@@ -1074,8 +1074,8 @@ macro_rules! trait_div_mut {
     };
 }
 
-call_with_ref_permutations! {trait_div_value, trait_div_mut, Int, int, BigInt, signed}
-call_with_ref_permutations! {trait_div_value, trait_div_mut, Uint, uint, BigUint, unsigned}
+call_with_ref_permutations! {trait_div_value, trait_div_mut, Int, int, BigInt, both signed and unsigned}
+call_with_ref_permutations! {trait_div_value, trait_div_mut, Uint, uint, BigUint, only unsigned}
 
 macro_rules! trait_mul_value {
     ($type:tt, $basetype:ty, $bigtype:ty, $selfvar:tt, $othvar:ident,
@@ -1108,8 +1108,8 @@ macro_rules! trait_mul_mut {
     };
 }
 
-call_with_ref_permutations! {trait_mul_value, trait_mul_mut, Int, int, BigInt, signed}
-call_with_ref_permutations! {trait_mul_value, trait_mul_mut, Uint, uint, BigUint, unsigned}
+call_with_ref_permutations! {trait_mul_value, trait_mul_mut, Int, int, BigInt, both signed and unsigned}
+call_with_ref_permutations! {trait_mul_value, trait_mul_mut, Uint, uint, BigUint, only unsigned}
 
 macro_rules! trait_rem_value {
     ($type:tt, $basetype:ty, $bigtype:ty, $selfvar:tt, $othvar:ident,
@@ -1142,8 +1142,8 @@ macro_rules! trait_rem_mut {
     };
 }
 
-call_with_ref_permutations! {trait_rem_value, trait_rem_mut, Int, int, BigInt, signed}
-call_with_ref_permutations! {trait_rem_value, trait_rem_mut, Uint, uint, BigUint, unsigned}
+call_with_ref_permutations! {trait_rem_value, trait_rem_mut, Int, int, BigInt, both signed and unsigned}
+call_with_ref_permutations! {trait_rem_value, trait_rem_mut, Uint, uint, BigUint, only unsigned}
 
 macro_rules! trait_sub_value {
     ($type:tt, $basetype:ty, $bigtype:ty, $selfvar:tt, $othvar:ident,
@@ -1176,8 +1176,8 @@ macro_rules! trait_sub_mut {
     };
 }
 
-call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Int, int, BigInt, signed}
-call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Uint, uint, BigUint, unsigned}
+call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Int, int, BigInt, both signed and unsigned}
+call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Uint, uint, BigUint, only unsigned}
 
 macro_rules! trait_partialeq {
     ($type:tt $basetype:ty) => {
