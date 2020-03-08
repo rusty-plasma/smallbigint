@@ -19,7 +19,6 @@
 //!
 //! - Bit operations
 //! - [`num_traits::Num`] (easy?)
-//! - [`num_traits::One`] (easy?)
 //! - [`num_traits::Signed`]
 //! - [`num_traits::Unsigned`]
 //! - [`num_integer::Integer`]
@@ -38,6 +37,7 @@
 use either::{Either, Left, Right};
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigInt, ToBigUint};
 use num_traits::cast::{FromPrimitive, ToPrimitive};
+use num_traits::identities::{One, Zero};
 #[allow(unused_imports)]
 use num_traits::{
     CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl, CheckedShr, CheckedSub,
@@ -218,6 +218,40 @@ impl Default for Uint {
 impl Default for Int {
     fn default() -> Self {
         Self::zero()
+    }
+}
+
+impl Zero for Uint {
+    fn zero() -> Self {
+        Self::small(0)
+    }
+    fn is_zero(&self) -> bool {
+        *self == Self::zero()
+    }
+}
+impl Zero for Int {
+    fn zero() -> Self {
+        Self::small(0)
+    }
+    fn is_zero(&self) -> bool {
+        *self == Self::zero()
+    }
+}
+
+impl One for Uint {
+    fn one() -> Self {
+        Self::small(1)
+    }
+    fn is_one(&self) -> bool {
+        *self == Self::one()
+    }
+}
+impl One for Int {
+    fn one() -> Self {
+        Self::small(1)
+    }
+    fn is_one(&self) -> bool {
+        *self == Self::one()
     }
 }
 

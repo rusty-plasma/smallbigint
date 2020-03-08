@@ -21,7 +21,6 @@ yet. Patches are welcome!
 
 - Bit operations
 - `num_traits::Num` (easy?)
-- `num_traits::One` (easy?)
 - `num_traits::Signed`
 - `num_traits::Unsigned`
 - `num_integer::Integer`
