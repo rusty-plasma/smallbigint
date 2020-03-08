@@ -39,14 +39,13 @@
 use either::{Either, Left, Right};
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigUint};
 use num_traits::cast::{FromPrimitive, ToPrimitive};
-use std::borrow::Borrow;
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::cmp::Ordering;
 use std::convert::{From, Into, TryFrom, TryInto};
 use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 use std::ops::{
-    Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
+    Add, AddAssign, Deref, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
 };
 
 use std::str::FromStr;
@@ -85,10 +84,10 @@ impl Uint {
     ///
     /// ```rust
     /// # use smallbigint::Uint; use num_bigint::BigUint;
-    /// # use std::borrow::Borrow;
+    /// # use std::ops::Deref;
     /// # let x = Uint::small(42);
     /// let x1 = x.cow_big();
-    /// let x2 : &BigUint = x1.borrow();
+    /// let x2 : &BigUint = x1.deref();
     /// ```
     ///
     /// We have to
@@ -155,10 +154,10 @@ impl Int {
     ///
     /// ```rust
     /// # use smallbigint::Int; use num_bigint::BigInt;
-    /// # use std::borrow::Borrow;
+    /// # use std::ops::Deref;
     /// # let x = Int::small(42);
     /// let x1 = x.cow_big();
-    /// let x2 : &BigInt = x1.borrow();
+    /// let x2 : &BigInt = x1.deref();
     /// ```
     ///
     /// We have to
@@ -334,7 +333,7 @@ impl Neg for &Int {
     type Output = Int;
     fn neg(self) -> Int {
         let self1 = self.cow_big();
-        let self2: &BigInt = self1.borrow();
+        let self2: &BigInt = self1.deref();
         Int::big(self2.neg()).normalize()
     }
 }
@@ -345,10 +344,10 @@ impl Ord for Uint {
             x.cmp(y)
         } else {
             let self1 = self.cow_big();
-            let self2: &BigUint = self1.borrow();
+            let self2: &BigUint = self1.deref();
             let other1 = other.cow_big();
-            let other2: &BigUint = other1.borrow();
-            self2.borrow().cmp(other2.borrow())
+            let other2: &BigUint = other1.deref();
+            self2.cmp(other2.deref())
         }
     }
 }
@@ -359,10 +358,10 @@ impl PartialOrd<Uint> for Uint {
             x.partial_cmp(y)
         } else {
             let self1 = self.cow_big();
-            let self2: &BigUint = self1.borrow();
+            let self2: &BigUint = self1.deref();
             let other1 = other.cow_big();
-            let other2: &BigUint = other1.borrow();
-            self2.borrow().partial_cmp(other2.borrow())
+            let other2: &BigUint = other1.deref();
+            self2.partial_cmp(other2.deref())
         }
     }
 }
@@ -373,10 +372,10 @@ impl Ord for Int {
             x.cmp(y)
         } else {
             let self1 = self.cow_big();
-            let self2: &BigInt = self1.borrow();
+            let self2: &BigInt = self1.deref();
             let other1 = other.cow_big();
-            let other2: &BigInt = other1.borrow();
-            self2.borrow().cmp(other2.borrow())
+            let other2: &BigInt = other1.deref();
+            self2.cmp(other2.deref())
         }
     }
 }
@@ -387,10 +386,10 @@ impl PartialOrd<Int> for Int {
             x.partial_cmp(y)
         } else {
             let self1 = self.cow_big();
-            let self2: &BigInt = self1.borrow();
+            let self2: &BigInt = self1.deref();
             let other1 = other.cow_big();
-            let other2: &BigInt = other1.borrow();
-            self2.borrow().partial_cmp(other2.borrow())
+            let other2: &BigInt = other1.deref();
+            self2.partial_cmp(other2.deref())
         }
     }
 }
@@ -415,10 +414,10 @@ impl PartialEq<Uint> for Uint {
             x == y
         } else {
             let self1 = self.cow_big();
-            let self2: &BigUint = self1.borrow();
+            let self2: &BigUint = self1.deref();
             let other1 = other.cow_big();
-            let other2: &BigUint = other1.borrow();
-            self2.borrow().eq(other2.borrow())
+            let other2: &BigUint = other1.deref();
+            self2.eq(other2.deref())
         }
     }
 }
@@ -427,8 +426,8 @@ impl PartialEq<Int> for Uint {
     fn eq(&self, other: &Int) -> bool {
         let self_bigint = BigInt::from(BigUint::from(self.clone()));
         let other1 = other.cow_big();
-        let other2: &BigInt = other1.borrow();
-        self_bigint.eq(other2.borrow())
+        let other2: &BigInt = other1.deref();
+        self_bigint.eq(other2.deref())
     }
 }
 impl Eq for Uint {}
@@ -439,10 +438,10 @@ impl PartialEq<Int> for Int {
             x == y
         } else {
             let self1 = self.cow_big();
-            let self2: &BigInt = self1.borrow();
+            let self2: &BigInt = self1.deref();
             let other1 = other.cow_big();
-            let other2: &BigInt = other1.borrow();
-            self2.borrow().eq(other2.borrow())
+            let other2: &BigInt = other1.deref();
+            self2.eq(other2.deref())
         }
     }
 }
@@ -451,8 +450,8 @@ impl PartialEq<Uint> for Int {
     fn eq(&self, other: &Uint) -> bool {
         let other_bigint = BigInt::from(BigUint::from(other.clone()));
         let self1 = self.cow_big();
-        let self2: &BigInt = self1.borrow();
-        other_bigint.eq(self2.borrow())
+        let self2: &BigInt = self1.deref();
+        other_bigint.eq(self2.deref())
     }
 }
 impl Eq for Int {}
@@ -973,21 +972,21 @@ macro_rules! call_with_ref_permutations {
         $macroname_value!{
             $type, $basetype, $bigtype, self, v, $type, &$type, &v.0, {
                 let v1 = v.cow_big()
-                let v2: &$bigtype = v1.borrow()
+                let v2: &$bigtype = v1.deref()
             }, $bigtype::from(self), v2
         }
         $macroname_value!{
             $type, $basetype, $bigtype, self, v, &$type, $type, &v.0, {
                 let self1 = self.cow_big()
-                let self2: &$bigtype = self1.borrow()
+                let self2: &$bigtype = self1.deref()
             }, self2, $bigtype::from(v)
         }
         $macroname_value!{
             $type, $basetype, $bigtype, self, v, &$type, &$type, &v.0, {
                 let self1 = self.cow_big()
-                let self2: &$bigtype = self1.borrow()
+                let self2: &$bigtype = self1.deref()
                 let v1 = v.cow_big()
-                let v2: &$bigtype = v1.borrow()
+                let v2: &$bigtype = v1.deref()
             }, self2, v2
         }
         $macroname_mut!{$type, $type}
@@ -1005,13 +1004,13 @@ macro_rules! call_with_ref_permutations {
         $macroname_value!{
             $type, $basetype, $bigtype, self, v, &$type, $baseothertype, Either::<&$baseothertype, $type>::Left(&v), {
                 let self1 = self.cow_big()
-                let self2: &$bigtype = self1.borrow()
+                let self2: &$bigtype = self1.deref()
             }, self2, v
         }
         $macroname_value!{
             $type, $basetype, $bigtype, self, v, &$type, &$baseothertype, Either::<&$baseothertype, $type>::Left(v), {
                 let self1 = self.cow_big()
-                let self2: &$bigtype = self1.borrow()
+                let self2: &$bigtype = self1.deref()
             }, self2, *v
         }
         $macroname_mut!{$type, $baseothertype}
