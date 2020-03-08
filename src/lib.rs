@@ -36,7 +36,7 @@
 //! simple that there is not much space where bugs could hide.
 
 use either::{Either, Left, Right};
-use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigUint};
+use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigInt, ToBigUint};
 use num_traits::cast::{FromPrimitive, ToPrimitive};
 #[allow(unused_imports)]
 use num_traits::{
@@ -462,7 +462,7 @@ impl Eq for Int {}
 // -- Basic stuff between different signedness --
 
 impl Uint {
-    /// Convert to [`Int`].
+    /// Convert owned to [`Int`].
     pub fn into_int(self) -> Int {
         match self.0 {
             Left(x) => {
@@ -475,6 +475,22 @@ impl Uint {
             Right(b) => Int(Right(Box::new((*b).into()))),
         }
     }
+    /// Convert reference to [`Int`].
+    pub fn to_int(&self) -> Int {
+        match &self.0 {
+            Left(x) => {
+                if let Ok(x1) = (*x).try_into() {
+                    Int(Left(x1))
+                } else {
+                    Int(Right(Box::new((*x).into())))
+                }
+            }
+            Right(b) => Int(Right(Box::new(
+                b.to_bigint()
+                    .expect("ToBigInt on BigUint should always succeed"),
+            ))),
+        }
+    }
 }
 /// An alias for `.into_uint()`.
 impl From<Uint> for Int {
@@ -484,11 +500,27 @@ impl From<Uint> for Int {
 }
 
 impl Int {
-    /// Convert to [`Uint`] if nonnegative, otherwise None.
+    /// Convert owned to [`Uint`] if nonnegative, otherwise None.
+    ///
+    /// As there is not yet such a method on [`BigUint`], for now this clones
+    /// the underlying storage. https://github.com/rust-num/num-bigint/issues/120
     pub fn into_uint(self) -> Option<Uint> {
         match self.0 {
             Left(x) => {
                 if let Ok(x1) = x.try_into() {
+                    Some(Uint(Left(x1)))
+                } else {
+                    Some(Uint(Right(Box::new(x.to_biguint()?))))
+                }
+            }
+            Right(x) => Some(Uint(Right(Box::new(x.to_biguint()?)))),
+        }
+    }
+    /// Convert reference to [`Uint`] if nonnegative, otherwise None.
+    pub fn to_uint(&self) -> Option<Uint> {
+        match &self.0 {
+            Left(x) => {
+                if let Ok(x1) = (*x).try_into() {
                     Some(Uint(Left(x1)))
                 } else {
                     Some(Uint(Right(Box::new(x.to_biguint()?))))
