@@ -18,7 +18,6 @@
 //! ## Other traits and methods still to be implemented:
 //!
 //! - Bit operations
-//! - [`num_traits::ops::checked`] traits
 //! - [`num_traits::Num`] (easy?)
 //! - [`num_traits::One`] (easy?)
 //! - [`num_traits::Signed`]
@@ -39,6 +38,10 @@
 use either::{Either, Left, Right};
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigUint};
 use num_traits::cast::{FromPrimitive, ToPrimitive};
+#[allow(unused_imports)]
+use num_traits::{
+    CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl, CheckedShr, CheckedSub,
+};
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::cmp::Ordering;
 use std::convert::{From, Into, TryFrom, TryInto};
@@ -1027,7 +1030,7 @@ macro_rules! trait_add_value {
                 fn add($selfvar, $othvar: $othtype) -> $type {
                     if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
                         if let Ok(y_base) = <$basetype>::try_from(*y) {
-                            if let Some(z) = x.checked_add(y_base) {
+                            if let Some(z) = <$basetype>::checked_add(*x, y_base) {
                                 return $type::small(z);
                             }
                         }
@@ -1061,7 +1064,7 @@ macro_rules! trait_div_value {
             fn div($selfvar, $othvar: $othtype) -> $type {
                 if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
                     if let Ok(y_base) = <$basetype>::try_from(*y) {
-                        if let Some(z) = x.checked_div(y_base) {
+                        if let Some(z) = <$basetype>::checked_div(*x, y_base) {
                             return $type::small(z);
                         }
                     }
@@ -1095,7 +1098,7 @@ macro_rules! trait_mul_value {
             fn mul($selfvar, $othvar: $othtype) -> $type {
                 if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
                     if let Ok(y_base) = <$basetype>::try_from(*y) {
-                        if let Some(z) = x.checked_mul(y_base) {
+                        if let Some(z) = <$basetype>::checked_mul(*x, y_base) {
                             return $type::small(z);
                         }
                     }
@@ -1129,7 +1132,7 @@ macro_rules! trait_rem_value {
             fn rem($selfvar, $othvar: $othtype) -> $type {
                 if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
                     if let Ok(y_base) = <$basetype>::try_from(*y) {
-                        if let Some(z) = x.checked_rem(y_base) {
+                        if let Some(z) = <$basetype>::checked_rem(*x, y_base) {
                             return $type::small(z);
                         }
                     }
@@ -1163,7 +1166,7 @@ macro_rules! trait_sub_value {
             fn sub($selfvar, $othvar: $othtype) -> $type {
                 if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
                     if let Ok(y_base) = <$basetype>::try_from(*y) {
-                        if let Some(z) = x.checked_sub(y_base) {
+                        if let Some(z) = <$basetype>::checked_sub(*x, y_base) {
                             return $type::small(z);
                         }
                     }
@@ -1187,6 +1190,62 @@ macro_rules! trait_sub_mut {
 
 call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Int, int, BigInt, both signed and unsigned}
 call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Uint, uint, BigUint, only unsigned}
+
+// The checked traits are always a function from (&Self, &Self) to Option<Self>.
+// We implement them by first trying them on the base type; if that works, falling
+// back to the big type. This could be improved: for certain traits we could give
+// an optimized implementation.
+
+macro_rules! checked_trait {
+    ($trait:tt, $method:tt, $type:tt) => {
+        impl $trait for $type {
+            fn $method(&self, other: &Self) -> Option<Self> {
+                // Try to do it on the base type.
+                if let (Left(x), Left(y)) = (&self.0, &other.0) {
+                    if let Some(res) = x.$method(y) {
+                        return Some($type::small(res));
+                    }
+                }
+                // If it fails, try again on the big type, otherwise really fail.
+                let x_big = self.cow_big();
+                let y_big = other.cow_big();
+                if let Some(z_big) = x_big.$method(y_big.deref()) {
+                    return Some($type::big(z_big));
+                } else {
+                    return None;
+                }
+            }
+        }
+    };
+}
+
+macro_rules! call_with_args {
+    ($macroname:tt, $baseargs:tt, [$($nextarg:tt),*]) => {
+        $(append_macro_call!{$macroname, $baseargs, $nextarg})*
+    };
+}
+
+macro_rules! append_macro_call {
+    ($macroname:tt, ($($baseargs:tt)*), $nextarg:tt) => {
+        $macroname!($($baseargs)* $nextarg)
+    };
+    ($macroname:tt, [$($baseargs:tt)*], $nextarg:tt) => {
+        $macroname![$($baseargs)* $nextarg]
+    };
+    ($macroname:tt, {$($baseargs:tt)*}, $nextarg:tt) => {
+        $macroname!{$($baseargs)* $nextarg}
+    };
+}
+
+call_with_args! {checked_trait, {CheckedAdd, checked_add, }, [Uint, Int]}
+call_with_args! {checked_trait, {CheckedDiv, checked_div, }, [Uint, Int]}
+call_with_args! {checked_trait, {CheckedMul, checked_mul, }, [Uint, Int]}
+// These don't yet exist for num_bigint.
+//   call_with_args! {checked_trait, {CheckedNeg, checked_neg, }, [Uint, Int]}
+//   call_with_args! {checked_trait, {CheckedRem, checked_rem, }, [Uint, Int]}
+//   call_with_args! {checked_trait, {CheckedShl, checked_shl, }, [Uint, Int]}
+//   call_with_args! {checked_trait, {CheckedShr, checked_shr, }, [Uint, Int]}
+call_with_args! {checked_trait, {CheckedSub, checked_sub, }, [Uint, Int]}
 
 macro_rules! trait_partialeq {
     ($type:tt $basetype:ty) => {
@@ -1298,6 +1357,10 @@ mod test {
         let eleven_pow11_norm_ref = eleven_pow11.normalize_ref();
         assert_eq!(eleven_pow11, eleven_pow11_norm);
         assert_eq!(eleven_pow11, *eleven_pow11_norm_ref);
+        assert_eq!(
+            &eleven_pow11 + &eleven_pow11,
+            eleven_pow11.checked_add(&eleven_pow11).unwrap()
+        );
     }
     #[test]
     fn test_signed() {
@@ -1350,5 +1413,9 @@ mod test {
         let eleven_pow11_norm_ref = eleven_pow11.normalize_ref();
         assert_eq!(eleven_pow11, eleven_pow11_norm);
         assert_eq!(eleven_pow11, *eleven_pow11_norm_ref);
+        assert_eq!(
+            &eleven_pow11 + &eleven_pow11,
+            eleven_pow11.checked_add(&eleven_pow11).unwrap()
+        );
     }
 }

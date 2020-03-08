@@ -20,7 +20,6 @@ yet. Patches are welcome!
 ## Other traits and methods still to be implemented:
 
 - Bit operations
-- `num_traits::ops::checked` traits
 - `num_traits::Num` (easy?)
 - `num_traits::One` (easy?)
 - `num_traits::Signed`
