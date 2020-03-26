@@ -18,3 +18,17 @@ num-bigint = "0.2.6"
 num-traits = "0.2.11"
 either = "1.5.3"
 num-integer = "0.1.42"
+
+[dev-dependencies]
+lazy_static = "1.4.0"
+num-iter = "0.1.40"
+failure = "0.1.7"
+exitfailure = "0.5.1"
+structopt = "0.3.12"
+
+[features]
+# Enable this feature to be able to run the benchmark tests.
+# This flag might go away in the near future when benchmarks
+# are available on cargo stable.
+bench = []
+benchall = []
