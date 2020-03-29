@@ -28,9 +28,9 @@ use std::str::FromStr;
 use structopt::StructOpt;
 
 #[cfg(feature = "bench")]
-const SMALL_PRIME_LIMIT: &str = ONE_MILLION;
+const SMALL_PRIME_LIMIT: &str = ONE_HUNDRED_THOUSAND;
 #[cfg(feature = "bench")]
-const ONE_MILLION: &str = "1000000";
+const ONE_HUNDRED_THOUSAND: &str = "100000";
 
 /// Find numbers with a nice prime factorization. Currently, a "nice" prime is one which has few
 /// distinct prime factors. We start at a number, find its prime factors, then keep decrementing
