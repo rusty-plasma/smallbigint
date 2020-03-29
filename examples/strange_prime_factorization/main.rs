@@ -4,10 +4,13 @@
 //!
 //!   1. You can execute this example from the command line, to find "nice" prime factorizations of
 //!      large numbers: start at a big number and it tries to find numbers below that that have
-//!      nicer and nicer prime factorizations.
+//!      nicer and nicer prime factorizations:
+//!
+//!          cargo run --release --example strange_prime_factorization -- -- 9007199254740991
 //!
 //!   2. You can execute benchmarks with `cargo +nightly bench --features bench,benchall --example strange_prime_factorization`.
 //!      Rust nightly is needed for benchmarks.
+//!
 #![cfg_attr(feature = "bench", feature(test))]
 
 mod using_bigint;
@@ -27,9 +30,9 @@ use std::str::FromStr;
 use structopt::StructOpt;
 
 #[cfg(feature = "bench")]
-const SMALL_PRIME_LIMIT: &str = ONE_HUNDRED_THOUSAND;
+const SMALL_PRIME_LIMIT: &str = ONE_MILLION;
 #[cfg(feature = "bench")]
-const ONE_HUNDRED_THOUSAND: &str = "100000";
+const ONE_MILLION: &str = "1000000";
 
 lazy_static! {
     pub static ref DEFAULT_TARGET: Int = Int::from_str(&"9007199254740991").unwrap();
@@ -72,8 +75,9 @@ fn main() -> Result<(), ExitFailure> {
             None => println!("  Failed to compute factorization for {}", n),
             Some(factors) => {
                 let quality = unique_elements(&factors);
-                if quality <= best_quality {
-                    best_quality = quality;
+                // Only report results that are at most 2 worse than the current best
+                if quality <= best_quality + 2 {
+                    best_quality = quality.min(best_quality);
                     println!(
                         "- {} has {} unique factors: [{}]",
                         n,
