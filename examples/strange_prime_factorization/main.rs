@@ -22,8 +22,6 @@ extern crate test;
 use test::Bencher;
 
 use exitfailure::ExitFailure;
-// use failure::ResultExt;
-use lazy_static::lazy_static;
 use smallbigint::Int;
 use std::collections::BTreeSet;
 use std::str::FromStr;
@@ -33,10 +31,6 @@ use structopt::StructOpt;
 const SMALL_PRIME_LIMIT: &str = ONE_MILLION;
 #[cfg(feature = "bench")]
 const ONE_MILLION: &str = "1000000";
-
-lazy_static! {
-    pub static ref DEFAULT_TARGET: Int = Int::from_str(&"9007199254740991").unwrap();
-}
 
 /// Find numbers with a nice prime factorization. Currently, a "nice" prime is one which has few
 /// distinct prime factors. We start at a number, find its prime factors, then keep decrementing

@@ -20,7 +20,6 @@ either = "1.5.3"
 num-integer = "0.1.42"
 
 [dev-dependencies]
-lazy_static = "1.4.0"
 num-iter = "0.1.40"
 failure = "0.1.7"
 exitfailure = "0.5.1"
