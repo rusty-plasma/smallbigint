@@ -38,7 +38,7 @@ fn find_small_prime_factorization_str_works() {
 }
 
 fn find_small_prime_factorization(v: &Uint, small_prime_limit: &Uint) -> Option<Vec<Uint>> {
-    assert!(v >= &1);
+    assert!(v >= 1);
     let mut current = v.clone();
     let mut factors: Vec<Uint> = Vec::new();
     while current != 1 {
@@ -59,7 +59,7 @@ fn find_small_prime_factor(v: &Uint, small_prime_limit: &Uint) -> Option<(Uint, 
         return Some((Uint::small(2), v / 2u8));
     }
     let mut cur_factor = Uint::small(3);
-    while cur_factor < *small_prime_limit {
+    while cur_factor < small_prime_limit {
         if v % &cur_factor == 0 {
             return Some((cur_factor.clone(), v / cur_factor));
         }

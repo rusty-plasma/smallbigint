@@ -375,6 +375,8 @@ impl Neg for &Int {
     }
 }
 
+// -- Basic stuff between both same and different signedness --
+
 impl Ord for Uint {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         if let (Left(x), Left(y)) = (&self.0, &other.0) {
@@ -430,8 +432,6 @@ impl PartialOrd<Int> for Int {
         }
     }
 }
-
-// -- Basic stuff between both same and different signedness --
 
 impl PartialOrd<Uint> for Int {
     fn partial_cmp(&self, other: &Uint) -> Option<std::cmp::Ordering> {
@@ -492,6 +492,43 @@ impl PartialEq<Uint> for Int {
     }
 }
 impl Eq for Int {}
+
+macro_rules! impl_ref_variants {
+    // Here we implement stuff like
+    //
+    //   - PartialEq<&i16> for Int
+    //   - PartialEq<i16> for &Int
+    //
+    // so that you don't have to call the * operator yourself as much. But we
+    // don't implement PartialEq<&i16> for &Int because the generic implementation
+    // already takes care of that.
+    //
+    // These functions are very simple (a dereference and a function call), so it
+    // seems reasonable to suggest that they should be inlined.
+    ($trait:tt, $method:tt, $selftype:ty, $othtype:ty, $resulttype:ty) => {
+        impl $trait<&$othtype> for $selftype {
+            #[inline]
+            fn $method(&self, other: &&$othtype) -> $resulttype {
+                self.$method(*other)
+            }
+        }
+        impl $trait<$othtype> for &$selftype {
+            #[inline]
+            fn $method(&self, other: &$othtype) -> $resulttype {
+                (*self).$method(other)
+            }
+        }
+    };
+}
+
+impl_ref_variants! { PartialEq, eq, Uint, Uint, bool }
+impl_ref_variants! { PartialEq, eq, Int, Uint, bool }
+impl_ref_variants! { PartialEq, eq, Uint, Int, bool }
+impl_ref_variants! { PartialEq, eq, Int, Int, bool }
+impl_ref_variants! { PartialOrd, partial_cmp, Uint, Uint, Option<Ordering> }
+impl_ref_variants! { PartialOrd, partial_cmp, Int, Uint, Option<Ordering> }
+impl_ref_variants! { PartialOrd, partial_cmp, Uint, Int, Option<Ordering> }
+impl_ref_variants! { PartialOrd, partial_cmp, Int, Int, Option<Ordering> }
 
 // -- Basic stuff between different signedness --
 
@@ -1032,27 +1069,27 @@ macro_rules! call_with_all_unsigned_base_types {
 //   type     = Int
 //   basetype = int (type alias for i32)
 //   bigtype  = BigInt
-macro_rules! call_with_ref_permutations {
+macro_rules! call_with_cow_permutations {
     ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt, both signed and unsigned) => {
-        call_with_ref_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
+        call_with_cow_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
         call_with_all_signed_base_types!{
-            call_with_ref_permutations,
+            call_with_cow_permutations,
             $macroname_value, $macroname_mut, $type, $basetype, $bigtype, base type
         }
         call_with_all_unsigned_base_types!{
-            call_with_ref_permutations,
+            call_with_cow_permutations,
             $macroname_value, $macroname_mut, $type, $basetype, $bigtype, base type
         }
     };
     ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt, only unsigned) => {
-        call_with_ref_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
+        call_with_cow_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
         call_with_all_unsigned_base_types!{
-            call_with_ref_permutations,
+            call_with_cow_permutations,
             $macroname_value, $macroname_mut, $type, $basetype, $bigtype, base type
         }
     };
     ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt) => {
-        call_with_ref_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
+        call_with_cow_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
     };
 
     // Calls the implementing macros for a number of cases. For example for Add/AddAssign, this would
@@ -1157,8 +1194,8 @@ macro_rules! trait_add_mut {
     };
 }
 
-call_with_ref_permutations! {trait_add_value, trait_add_mut, Int, int, BigInt, both signed and unsigned}
-call_with_ref_permutations! {trait_add_value, trait_add_mut, Uint, uint, BigUint, only unsigned}
+call_with_cow_permutations! {trait_add_value, trait_add_mut, Int, int, BigInt, both signed and unsigned}
+call_with_cow_permutations! {trait_add_value, trait_add_mut, Uint, uint, BigUint, only unsigned}
 
 macro_rules! trait_div_value {
     ($type:tt, $basetype:ty, $bigtype:ty, $selfvar:tt, $othvar:ident,
@@ -1191,8 +1228,8 @@ macro_rules! trait_div_mut {
     };
 }
 
-call_with_ref_permutations! {trait_div_value, trait_div_mut, Int, int, BigInt, both signed and unsigned}
-call_with_ref_permutations! {trait_div_value, trait_div_mut, Uint, uint, BigUint, only unsigned}
+call_with_cow_permutations! {trait_div_value, trait_div_mut, Int, int, BigInt, both signed and unsigned}
+call_with_cow_permutations! {trait_div_value, trait_div_mut, Uint, uint, BigUint, only unsigned}
 
 macro_rules! trait_mul_value {
     ($type:tt, $basetype:ty, $bigtype:ty, $selfvar:tt, $othvar:ident,
@@ -1225,8 +1262,8 @@ macro_rules! trait_mul_mut {
     };
 }
 
-call_with_ref_permutations! {trait_mul_value, trait_mul_mut, Int, int, BigInt, both signed and unsigned}
-call_with_ref_permutations! {trait_mul_value, trait_mul_mut, Uint, uint, BigUint, only unsigned}
+call_with_cow_permutations! {trait_mul_value, trait_mul_mut, Int, int, BigInt, both signed and unsigned}
+call_with_cow_permutations! {trait_mul_value, trait_mul_mut, Uint, uint, BigUint, only unsigned}
 
 macro_rules! trait_rem_value {
     ($type:tt, $basetype:ty, $bigtype:ty, $selfvar:tt, $othvar:ident,
@@ -1259,8 +1296,8 @@ macro_rules! trait_rem_mut {
     };
 }
 
-call_with_ref_permutations! {trait_rem_value, trait_rem_mut, Int, int, BigInt, both signed and unsigned}
-call_with_ref_permutations! {trait_rem_value, trait_rem_mut, Uint, uint, BigUint, only unsigned}
+call_with_cow_permutations! {trait_rem_value, trait_rem_mut, Int, int, BigInt, both signed and unsigned}
+call_with_cow_permutations! {trait_rem_value, trait_rem_mut, Uint, uint, BigUint, only unsigned}
 
 macro_rules! trait_sub_value {
     ($type:tt, $basetype:ty, $bigtype:ty, $selfvar:tt, $othvar:ident,
@@ -1293,8 +1330,8 @@ macro_rules! trait_sub_mut {
     };
 }
 
-call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Int, int, BigInt, both signed and unsigned}
-call_with_ref_permutations! {trait_sub_value, trait_sub_mut, Uint, uint, BigUint, only unsigned}
+call_with_cow_permutations! {trait_sub_value, trait_sub_mut, Int, int, BigInt, both signed and unsigned}
+call_with_cow_permutations! {trait_sub_value, trait_sub_mut, Uint, uint, BigUint, only unsigned}
 
 // The checked traits are always a function from (&Self, &Self) to Option<Self>.
 // We implement them by first trying them on the base type; if that works, falling
@@ -1353,7 +1390,7 @@ call_with_args! {checked_trait, {CheckedMul, checked_mul, }, [Uint, Int]}
 call_with_args! {checked_trait, {CheckedSub, checked_sub, }, [Uint, Int]}
 
 macro_rules! trait_partialeq {
-    ($type:tt $basetype:ty) => {
+    (base, $type:tt, $basetype:ty) => {
         // One way
         impl PartialEq<$basetype> for $type {
             fn eq(&self, other: &$basetype) -> bool {
@@ -1367,13 +1404,18 @@ macro_rules! trait_partialeq {
                 ToGeneric::<$basetype>::to_generic(other).map_or(false, |x| x.eq(self))
             }
         }
+
+        // These are just lazy variants so you don't have to do * yourself when
+        // one is a reference and one isn't.
+        impl_ref_variants! {PartialEq, eq, $type, $basetype, bool}
+        impl_ref_variants! {PartialEq, eq, $basetype, $type, bool}
     };
 }
 
-call_with_all_unsigned_base_types!(trait_partialeq, Uint);
-call_with_all_unsigned_base_types!(trait_partialeq, Int);
-call_with_all_signed_base_types!(trait_partialeq, Uint);
-call_with_all_signed_base_types!(trait_partialeq, Int);
+call_with_all_unsigned_base_types!(trait_partialeq, base, Uint,);
+call_with_all_unsigned_base_types!(trait_partialeq, base, Int,);
+call_with_all_signed_base_types!(trait_partialeq, base, Uint,);
+call_with_all_signed_base_types!(trait_partialeq, base, Int,);
 
 macro_rules! trait_partialord_straight {
     ($type:tt $basetype:tt) => {
@@ -1405,6 +1447,9 @@ macro_rules! trait_partialord_straight {
                 other.partial_cmp(self).map(|ord| ord.reverse())
             }
         }
+
+        impl_ref_variants! {PartialOrd, partial_cmp, $type, $basetype, Option<Ordering>}
+        impl_ref_variants! {PartialOrd, partial_cmp, $basetype, $type, Option<Ordering>}
     };
 }
 
@@ -1415,12 +1460,14 @@ call_with_all_signed_base_types!(trait_partialord_straight, Int);
 
 #[cfg(test)]
 mod test {
-    #![allow(clippy::redundant_clone, clippy::cognitive_complexity)]
+    #![allow(clippy::redundant_clone, clippy::cognitive_complexity, clippy::op_ref)]
     use super::*;
     #[test]
     fn test_unsigned() {
         let eleven = Uint::small(11);
         assert_eq!(eleven, 11u8);
+        assert_eq!(&eleven, 11u8);
+        assert_eq!(eleven, &11u8);
         assert_ne!(eleven, 10u8);
         assert_eq!(11u8, eleven);
         assert_ne!(10u8, eleven);
@@ -1447,12 +1494,16 @@ mod test {
         assert!(eleven_pow11.clone().0.is_right());
         assert!(eleven_pow11.clone().normalize().0.is_right());
         assert!(eleven < eleven_pow11);
+        assert!(&eleven < eleven_pow11);
+        assert!(eleven < &eleven_pow11);
         assert!(11u8 < eleven_pow11);
         assert!(11i8 < eleven_pow11);
         let eleven_big = Uint::big(BigUint::from(11u8));
         let eleven_big_norm = eleven_big.clone().normalize();
         let eleven_big_norm_ref = eleven_big.normalize_ref();
         assert_eq!(eleven, eleven_big);
+        assert_eq!(&eleven, eleven_big);
+        assert_eq!(eleven, &eleven_big);
         assert_eq!(eleven, eleven_big_norm);
         assert_eq!(eleven, *eleven_big_norm_ref);
         assert_eq!(eleven_big.is_stored_as_big(), true);
@@ -1471,6 +1522,8 @@ mod test {
     fn test_signed() {
         let eleven = Int::small(11);
         assert_eq!(eleven, 11u8);
+        assert_eq!(&eleven, 11u8);
+        assert_eq!(eleven, &11u8);
         assert_ne!(eleven, 10u8);
         assert_eq!(11u8, eleven);
         assert_ne!(10u8, eleven);
@@ -1497,6 +1550,8 @@ mod test {
         assert!(eleven_pow11.clone().0.is_right());
         assert!(eleven_pow11.clone().normalize().0.is_right());
         assert!(eleven < eleven_pow11);
+        assert!(&eleven < eleven_pow11);
+        assert!(eleven < &eleven_pow11);
         assert!(-eleven.clone() < eleven_pow11);
         assert!(-eleven_pow11.clone() < eleven);
         assert!(-eleven_pow11.clone() < -eleven.clone());
@@ -1509,6 +1564,8 @@ mod test {
         let eleven_big_norm = eleven_big.clone().normalize();
         let eleven_big_norm_ref = eleven_big.normalize_ref();
         assert_eq!(eleven, eleven_big);
+        assert_eq!(&eleven, eleven_big);
+        assert_eq!(eleven, &eleven_big);
         assert_eq!(eleven, eleven_big_norm);
         assert_eq!(eleven, *eleven_big_norm_ref);
         assert_eq!(eleven_big.is_stored_as_big(), true);
