@@ -1011,6 +1011,27 @@ macro_rules! call_with_all_unsigned_base_types {
     };
 }
 
+// The first macro name represents a macro to define e.g. Add; the second represents
+// a macro to define e.g. AddAssign.
+//
+// There are a number of ways to use this macro; the mode is indicated by the last argument,
+// which is merely a textual mode indicator. This macro can help with implementing four kinds
+// of things:
+//
+// (1a) impl Add<Int> for Int (and various &-combinations)
+// (1b) impl AddAssign<Int> for Int (and AddAssign<&Int>)
+// (1a) impl Add<i16> for Int (and various &-combinations, and other base types)
+// (1b) impl AddAssign<i16> for Int (and AddAssign<&i16>, and other base types)
+//
+// I advise you to look at the invocations of this macro, and perhaps also at the macroexpansions.
+//
+// Example parameter values:
+//
+//   macroname_value = trait_add_value
+//   macroname_mut   = trait_add_mut
+//   type     = Int
+//   basetype = int (type alias for i32)
+//   bigtype  = BigInt
 macro_rules! call_with_ref_permutations {
     ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt, both signed and unsigned) => {
         call_with_ref_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
@@ -1033,6 +1054,21 @@ macro_rules! call_with_ref_permutations {
     ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt) => {
         call_with_ref_permutations!{$macroname_value, $macroname_mut, $type, $basetype, $bigtype, self case}
     };
+
+    // Calls the implementing macros for a number of cases. For example for Add/AddAssign, this would
+    // call macros to implement, in order:
+    //
+    // - Add<Int> for Int
+    // - Add<&Int> for Int
+    // - Add<Int> for &Int
+    // - Add<&Int> for &Int
+    //
+    // In all cases, the implementing macro would have two cases, one for when self and other are
+    // small, one for when one of them is big. The latter case takes a &BigInt, which is provided
+    // using .cow_big(). The code fragment argument is inserted to make an expression for &BigInt
+    // possible.
+    //
+    // Also, calls macros to implement AddAssign<Int> and AddAssign<&Int>.
     ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt, self case) => {
         $macroname_value!{
             $type, $basetype, $bigtype, self, v, $type, $type, &v.0, {},
@@ -1061,6 +1097,9 @@ macro_rules! call_with_ref_permutations {
         $macroname_mut!{$type, $type}
         $macroname_mut!{$type, &$type}
     };
+
+    // Calls the implementing macros for the base types (e.g. Add<i128> for Int), with expressions
+    // that first call $bigtype::from(..) on the i128 to convert to &Int.
     ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:ty, $bigtype:tt, base type $baseothertype:ty) => {
         $macroname_value!{
             $type, $basetype, $bigtype, self, v, $type, $baseothertype, Either::<&$baseothertype, $type>::Left(&v), {},
