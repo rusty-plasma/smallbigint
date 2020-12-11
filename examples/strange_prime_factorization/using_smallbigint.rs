@@ -1,4 +1,5 @@
-use failure::{ensure, Error, ResultExt};
+use anyhow::{ensure, Context, Error};
+
 use smallbigint::Uint;
 use std::str::FromStr;
 extern crate num_iter;

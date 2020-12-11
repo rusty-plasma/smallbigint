@@ -569,7 +569,8 @@ impl Int {
     /// Convert owned to [`Uint`] if nonnegative, otherwise None.
     ///
     /// As there is not yet such a method on [`BigUint`], for now this clones
-    /// the underlying storage. https://github.com/rust-num/num-bigint/issues/120
+    /// the underlying storage.
+    /// <https://github.com/rust-num/num-bigint/issues/120>
     pub fn into_uint(self) -> Option<Uint> {
         match self.0 {
             Left(x) => {

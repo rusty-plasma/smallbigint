@@ -21,7 +21,6 @@ extern crate test;
 #[cfg(feature = "bench")]
 use test::Bencher;
 
-use exitfailure::ExitFailure;
 use smallbigint::Int;
 use std::collections::BTreeSet;
 use std::str::FromStr;
@@ -58,7 +57,7 @@ fn range(start: &str, stop: &str, step: &str) -> impl Iterator<Item = String> {
     .map(|x| format!("{}", x))
 }
 
-fn main() -> Result<(), ExitFailure> {
+fn main() -> Result<(), anyhow::Error> {
     let args = Cli::from_args();
 
     let mut best_quality = 99999;
