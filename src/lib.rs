@@ -34,6 +34,9 @@
 //! There aren't super many unit tests currently, but the code is sufficiently
 //! simple that there is not much space where bugs could hide.
 
+// Some useless conversions make the code look more uniform.
+#![allow(clippy::useless_conversion)]
+
 use either::{Either, Left, Right};
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigInt, ToBigUint};
 use num_traits::cast::{FromPrimitive, ToPrimitive};
@@ -129,11 +132,7 @@ impl Uint {
     }
     #[allow(dead_code)]
     fn is_stored_as_big(&self) -> bool {
-        if let Right(_) = self.0 {
-            true
-        } else {
-            false
-        }
+        matches!(self.0, Right(_))
     }
 }
 
@@ -199,11 +198,7 @@ impl Int {
     }
     #[allow(dead_code)]
     fn is_stored_as_big(&self) -> bool {
-        if let Right(_) = self.0 {
-            true
-        } else {
-            false
-        }
+        matches!(self.0, Right(_))
     }
 }
 
