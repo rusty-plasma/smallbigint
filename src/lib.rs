@@ -1,35 +1,24 @@
-//! A wrapper around [`num_bigint::BigUint`] and [`num_bigint::BigInt`] that
-//! stays out of the heap for small values.
+//! Two types, [`Uint`] and [`Int`], like `smallvec` for big integers.
+//! Anything that fits in 32 bits stays on the stack. Numbers that
+//! don't fit are stored in a `Box<num_bigint::BigUint>` / `Box<num_bigint::BigInt>`.
 //!
-//! In the current implementation, we go to the heap for anything that
-//! doesn't fit in 32 bits.
+//! On 64-bit architectures, by default we use `unsafe` to compress
+//! the types to 8 bytes, exploiting pointer alignment. This behavior
+//! is triggered by the `unsafe-opt` feature, which is enabled by default.
 //!
-//! This crate already has a lot of relevant methods, but it is not really complete
-//! yet. Patches are welcome!
+//! ## Implemented traits
 //!
-//! Care has usually been taken to avoid allocation in the methods here, but not in
-//! all cases.
+//! Most important numeric traits have been implemented. Here are some that aren't yet;
+//! pull requests are welcome!
 //!
-//! ## To do, and important:
-//!
-//! - Implement `std::fmt::{Binary, LowerHex, Octal, UpperHex}` (easy?)
+//! - [`std::fmt::{Binary, LowerHex, Octal, UpperHex}`]
+//! - Bit operations
+//! - [`num_traits::Num`], [`num_traits::Signed`], [`num_traits::Unsigned`],
+//!   [`num_integer::Integer`], [`num_integer::Roots`], [`std::iter::Product`],
+//!   [`std::iter::Sum`], [`num_traits::pow::Pow`]
+//! - Other methods implemented directly on [`BigInt`], [`BigUint`]
 //! - Implement `num_bigint::{ToBigInt, ToBigUint}`
 //!
-//! ## Other traits and methods still to be implemented:
-//!
-//! - Bit operations
-//! - [`num_traits::Num`] (easy?)
-//! - [`num_traits::Signed`]
-//! - [`num_traits::Unsigned`]
-//! - [`num_integer::Integer`]
-//! - [`num_integer::Roots`]
-//! - [`std::iter::Product`]
-//! - [`std::iter::Sum`]
-//! - Other methods implemented directly on BigInt, BigUint
-//!
-//! ## Not done and seems hard:
-//!
-//! - [`num_traits::pow::Pow`]
 //!
 //! There aren't super many unit tests currently, but the code is sufficiently
 //! simple that there is not much space where bugs could hide.
@@ -37,6 +26,7 @@
 // Some useless conversions make the code look more uniform.
 #![allow(clippy::useless_conversion)]
 
+use cfg_if::cfg_if;
 use either::{Either, Left, Right};
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigInt, ToBigUint};
 use num_traits::cast::{FromPrimitive, ToPrimitive};
@@ -65,20 +55,87 @@ type uint = u32;
 #[allow(non_camel_case_types)]
 type int = i32;
 
+cfg_if! {
+    if #[cfg(any(not(feature = "unsafe-opt"), not(target_pointer_width = "64")))] {
+        // The real contents of the Uint and Int types. If we are using the
+        // unsafe optimization, then we use a different type that's equivalent
+        // to these Eithers.
+
+        #[derive(Clone)]
+        pub struct UintInner(Either<uint, Box<BigUint>>);
+        #[derive(Clone)]
+        pub struct IntInner(Either<int, Box<BigInt>>);
+
+        impl UintInner {
+            const fn make_left(i: u32) -> Self {
+                UintInner(Left(i))
+            }
+            fn make(v: Either<u32, Box<BigUint>>) -> Self {
+                UintInner(v)
+            }
+            fn get(self) -> Either<u32, Box<BigUint>> {
+                self.0
+            }
+            fn get_ref(&self) -> Either<u32, &BigUint> {
+                match self.0 {
+                    Left(v) => Left(v),
+                    Right(ref b) => Right(&*b),
+                }
+            }
+        }
+
+        impl IntInner {
+            const fn make_left(i: i32) -> Self {
+                IntInner(Left(i))
+            }
+            fn make(v: Either<i32, Box<BigInt>>) -> Self {
+                IntInner(v)
+            }
+            fn get(self) -> Either<i32, Box<BigInt>> {
+                self.0
+            }
+            fn get_ref(&self) -> Either<i32, &BigInt> {
+                match self.0 {
+                    Left(v) => Left(v),
+                    Right(ref b) => Right(&*b),
+                }
+            }
+        }
+    } else {
+        mod unsafeu32orbox;
+
+        type UintInner = unsafeu32orbox::UnsafeU32OrBox<BigUint>;
+        type IntInner = unsafeu32orbox::UnsafeI32OrBox<BigInt>;
+    }
+}
+
 #[derive(Clone)]
-pub struct Uint(Either<uint, Box<BigUint>>);
+pub struct Uint(UintInner);
 #[derive(Clone)]
-pub struct Int(Either<int, Box<BigInt>>);
+pub struct Int(IntInner);
 
 impl Uint {
+    const fn make_left(i: u32) -> Self {
+        Uint(UintInner::make_left(i))
+    }
+    fn mk(v: Either<u32, Box<BigUint>>) -> Self {
+        Uint(UintInner::make(v))
+    }
+    fn get(self) -> Either<u32, Box<BigUint>> {
+        self.0.get()
+    }
+    fn get_ref(&self) -> Either<u32, &BigUint> {
+        self.0.get_ref()
+    }
+
     pub const fn zero() -> Self {
         Self::small(0)
     }
     pub const fn small(x: uint) -> Self {
-        Uint(Left(x))
+        Uint::make_left(x)
     }
     pub fn big(v: BigUint) -> Self {
-        Uint(Right(Box::new(v)))
+        Uint::mk(Right(Box::new(v)))
     }
     /// A convenience function to get or convert to a [`BigUint`], without
     /// having to copy any heap-allocated data if we are already a `&BigUint`.
@@ -101,7 +158,7 @@ impl Uint {
     /// - Put `x1` in a variable, so that the compiler can figure out the lifetimes
     /// - Put `x2` in a variable, otherwise the Rust compiler can't figure out its type.
     pub fn cow_big(&self) -> Cow<BigUint> {
-        match self.0 {
+        match self.get_ref() {
             Left(x) => Owned(x.into()),
             Right(ref b) => Borrowed(b),
         }
@@ -109,13 +166,13 @@ impl Uint {
     /// If we're storing a [`BigUint`] but it would fit in a small uint instead, then
     /// convert, and discard the heap-allocated memory.
     pub fn normalize(self) -> Self {
-        match self.0 {
-            Left(x) => Self(Left(x)),
+        match self.get() {
+            Left(x) => Self::mk(Left(x)),
             Right(b) => {
                 if let Some(x) = b.to_u32() {
-                    Self(Left(x)) // drop the memory
+                    Self::mk(Left(x)) // drop the memory
                 } else {
-                    Self(Right(b))
+                    Self::mk(Right(b))
                 }
             }
         }
@@ -123,28 +180,41 @@ impl Uint {
     /// Like `normalize`, but borrows instead.
     #[allow(clippy::needless_return)]
     pub fn normalize_ref(&self) -> Cow<Self> {
-        if let Right(ref b) = self.0 {
+        if let Right(ref b) = self.0.get_ref() {
             if let Some(x) = b.to_u32() {
-                return Owned(Self(Left(x)));
+                return Owned(Self::mk(Left(x)));
             }
         }
         return Borrowed(self);
     }
     #[allow(dead_code)]
     fn is_stored_as_big(&self) -> bool {
-        matches!(self.0, Right(_))
+        matches!(self.0.get_ref(), Right(_))
     }
 }
 
 impl Int {
+    const fn make_left(i: i32) -> Self {
+        Int(IntInner::make_left(i))
+    }
+    fn mk(v: Either<i32, Box<BigInt>>) -> Self {
+        Int(IntInner::make(v))
+    }
+    fn get(self) -> Either<i32, Box<BigInt>> {
+        self.0.get()
+    }
+    fn get_ref(&self) -> Either<i32, &BigInt> {
+        self.0.get_ref()
+    }
+
     pub const fn zero() -> Self {
         Self::small(0)
     }
     pub const fn small(x: int) -> Self {
-        Int(Left(x))
+        Int::make_left(x)
     }
     pub fn big(v: BigInt) -> Self {
-        Int(Right(Box::new(v)))
+        Int::mk(Right(Box::new(v)))
     }
     /// A convenience function to get or convert to a [`BigInt`], without
     /// having to copy any heap-allocated data if we are already a `&BigInt`.
@@ -167,7 +237,7 @@ impl Int {
     /// - Put `x1` in a variable, so that the compiler can figure out the lifetimes
     /// - Put `x2` in a variable, otherwise the Rust compiler can't figure out its type.
     pub fn cow_big(&self) -> Cow<BigInt> {
-        match self.0 {
+        match self.get_ref() {
             Left(x) => Owned(x.into()),
             Right(ref b) => Borrowed(b),
         }
@@ -175,13 +245,13 @@ impl Int {
     /// If we're storing a [`BigInt`] but it would fit in a small int instead, then
     /// convert, and discard the heap-allocated memory.
     pub fn normalize(self) -> Self {
-        match self.0 {
-            Left(x) => Self(Left(x)),
+        match self.get() {
+            Left(x) => Self::mk(Left(x)),
             Right(b) => {
                 if let Some(x) = b.to_i32() {
-                    Self(Left(x)) // drop the memory
+                    Self::mk(Left(x)) // drop the memory
                 } else {
-                    Self(Right(b))
+                    Self::mk(Right(b))
                 }
             }
         }
@@ -189,16 +259,16 @@ impl Int {
     /// Like `normalize`, but borrows instead.
     #[allow(clippy::needless_return)]
     pub fn normalize_ref(&self) -> Cow<Self> {
-        if let Right(ref b) = self.0 {
+        if let Right(ref b) = self.0.get_ref() {
             if let Some(x) = b.to_i32() {
-                return Owned(Self(Left(x)));
+                return Owned(Self::mk(Left(x)));
             }
         }
         return Borrowed(self);
     }
     #[allow(dead_code)]
     fn is_stored_as_big(&self) -> bool {
-        matches!(self.0, Right(_))
+        matches!(self.0.get_ref(), Right(_))
     }
 }
 
@@ -266,8 +336,8 @@ impl<T: Default> Transformable for T {
 
 impl Display for Uint {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match &self.0 {
-            Left(x) => Display::fmt(x, f),
+        match self.0.get_ref() {
+            Left(x) => Display::fmt(&x, f),
             Right(b) => Display::fmt(b, f),
         }
     }
@@ -275,8 +345,8 @@ impl Display for Uint {
 
 impl Display for Int {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match &self.0 {
-            Left(x) => Display::fmt(x, f),
+        match self.0.get_ref() {
+            Left(x) => Display::fmt(&x, f),
             Right(b) => Display::fmt(b, f),
         }
     }
@@ -296,12 +366,12 @@ impl Debug for Int {
 
 impl From<BigUint> for Uint {
     fn from(v: BigUint) -> Self {
-        Uint(Right(Box::new(v)))
+        Uint::mk(Right(Box::new(v)))
     }
 }
 impl From<Uint> for BigUint {
     fn from(v: Uint) -> BigUint {
-        match v.0 {
+        match v.0.get() {
             Left(x) => x.into(),
             Right(b) => *b,
         }
@@ -310,12 +380,12 @@ impl From<Uint> for BigUint {
 
 impl From<BigInt> for Int {
     fn from(v: BigInt) -> Self {
-        Int(Right(Box::new(v)))
+        Int::mk(Right(Box::new(v)))
     }
 }
 impl From<Int> for BigInt {
     fn from(v: Int) -> BigInt {
-        match v.0 {
+        match v.0.get() {
             Left(x) => x.into(),
             Right(b) => *b,
         }
@@ -338,7 +408,7 @@ impl FromStr for Int {
 
 impl Hash for Uint {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        match &self.normalize_ref().0 {
+        match self.normalize_ref().get_ref() {
             Left(x) => x.hash(state),
             Right(b) => b.hash(state),
         }
@@ -347,7 +417,7 @@ impl Hash for Uint {
 
 impl Hash for Int {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        match &self.normalize_ref().0 {
+        match self.normalize_ref().get_ref() {
             Left(x) => x.hash(state),
             Right(b) => b.hash(state),
         }
@@ -374,8 +444,8 @@ impl Neg for &Int {
 
 impl Ord for Uint {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if let (Left(x), Left(y)) = (&self.0, &other.0) {
-            x.cmp(y)
+        if let (Left(x), Left(y)) = (self.get_ref(), other.get_ref()) {
+            x.cmp(&y)
         } else {
             let self1 = self.cow_big();
             let self2: &BigUint = self1.deref();
@@ -388,8 +458,8 @@ impl Ord for Uint {
 
 impl PartialOrd<Uint> for Uint {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if let (Left(x), Left(y)) = (&self.0, &other.0) {
-            x.partial_cmp(y)
+        if let (Left(x), Left(y)) = (self.get_ref(), other.get_ref()) {
+            x.partial_cmp(&y)
         } else {
             let self1 = self.cow_big();
             let self2: &BigUint = self1.deref();
@@ -402,8 +472,8 @@ impl PartialOrd<Uint> for Uint {
 
 impl Ord for Int {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if let (Left(x), Left(y)) = (&self.0, &other.0) {
-            x.cmp(y)
+        if let (Left(x), Left(y)) = (self.get_ref(), other.get_ref()) {
+            x.cmp(&y)
         } else {
             let self1 = self.cow_big();
             let self2: &BigInt = self1.deref();
@@ -416,8 +486,8 @@ impl Ord for Int {
 
 impl PartialOrd<Int> for Int {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if let (Left(x), Left(y)) = (&self.0, &other.0) {
-            x.partial_cmp(y)
+        if let (Left(x), Left(y)) = (self.get_ref(), other.get_ref()) {
+            x.partial_cmp(&y)
         } else {
             let self1 = self.cow_big();
             let self2: &BigInt = self1.deref();
@@ -442,7 +512,7 @@ impl PartialOrd<Int> for Uint {
 
 impl PartialEq<Uint> for Uint {
     fn eq(&self, other: &Self) -> bool {
-        if let (Left(x), Left(y)) = (&self.0, &other.0) {
+        if let (Left(x), Left(y)) = (self.get_ref(), other.get_ref()) {
             x == y
         } else {
             let self1 = self.cow_big();
@@ -466,7 +536,7 @@ impl Eq for Uint {}
 
 impl PartialEq<Int> for Int {
     fn eq(&self, other: &Self) -> bool {
-        if let (Left(x), Left(y)) = (&self.0, &other.0) {
+        if let (Left(x), Left(y)) = (self.get_ref(), other.get_ref()) {
             x == y
         } else {
             let self1 = self.cow_big();
@@ -530,28 +600,28 @@ impl_ref_variants! { PartialOrd, partial_cmp, Int, Int, Option<Ordering> }
 impl Uint {
     /// Convert owned to [`Int`].
     pub fn into_int(self) -> Int {
-        match self.0 {
+        match self.get() {
             Left(x) => {
                 if let Ok(x1) = x.try_into() {
-                    Int(Left(x1))
+                    Int::mk(Left(x1))
                 } else {
-                    Int(Right(Box::new(x.into())))
+                    Int::mk(Right(Box::new(x.into())))
                 }
             }
-            Right(b) => Int(Right(Box::new((*b).into()))),
+            Right(b) => Int::mk(Right(Box::new((*b).into()))),
         }
     }
     /// Convert reference to [`Int`].
     pub fn to_int(&self) -> Int {
-        match &self.0 {
+        match self.0.get_ref() {
             Left(x) => {
-                if let Ok(x1) = (*x).try_into() {
-                    Int(Left(x1))
+                if let Ok(x1) = x.try_into() {
+                    Int::mk(Left(x1))
                 } else {
-                    Int(Right(Box::new((*x).into())))
+                    Int::mk(Right(Box::new(x.into())))
                 }
             }
-            Right(b) => Int(Right(Box::new(
+            Right(b) => Int::mk(Right(Box::new(
                 b.to_bigint()
                     .expect("ToBigInt on BigUint should always succeed"),
             ))),
@@ -572,28 +642,28 @@ impl Int {
     /// the underlying storage.
     /// <https://github.com/rust-num/num-bigint/issues/120>
     pub fn into_uint(self) -> Option<Uint> {
-        match self.0 {
+        match self.get() {
             Left(x) => {
                 if let Ok(x1) = x.try_into() {
-                    Some(Uint(Left(x1)))
+                    Some(Uint::mk(Left(x1)))
                 } else {
-                    Some(Uint(Right(Box::new(x.to_biguint()?))))
+                    Some(Uint::mk(Right(Box::new(x.to_biguint()?))))
                 }
             }
-            Right(x) => Some(Uint(Right(Box::new(x.to_biguint()?)))),
+            Right(x) => Some(Uint::mk(Right(Box::new(x.to_biguint()?)))),
         }
     }
     /// Convert reference to [`Uint`] if nonnegative, otherwise None.
     pub fn to_uint(&self) -> Option<Uint> {
-        match &self.0 {
+        match self.0.get_ref() {
             Left(x) => {
-                if let Ok(x1) = (*x).try_into() {
-                    Some(Uint(Left(x1)))
+                if let Ok(x1) = x.try_into() {
+                    Some(Uint::mk(Left(x1)))
                 } else {
-                    Some(Uint(Right(Box::new(x.to_biguint()?))))
+                    Some(Uint::mk(Right(Box::new(x.to_biguint()?))))
                 }
             }
-            Right(x) => Some(Uint(Right(Box::new(x.to_biguint()?)))),
+            Right(x) => Some(Uint::mk(Right(Box::new(x.to_biguint()?)))),
         }
     }
 }
@@ -615,9 +685,9 @@ impl TryFrom<Int> for Uint {
 impl From<u128> for Uint {
     fn from(x: u128) -> Self {
         if let Ok(x) = x.try_into() {
-            Uint(Left(x))
+            Uint::mk(Left(x))
         } else {
-            Uint(Right(Box::new(x.into())))
+            Uint::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -625,9 +695,9 @@ impl TryFrom<i128> for Uint {
     type Error = IntIsNegativeError;
     fn try_from(x: i128) -> Result<Self, Self::Error> {
         if let Ok(x) = x.try_into() {
-            Ok(Uint(Left(x)))
+            Ok(Uint::mk(Left(x)))
         } else {
-            Ok(Uint(Right(Box::new(
+            Ok(Uint::mk(Right(Box::new(
                 BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
             ))))
         }
@@ -636,9 +706,9 @@ impl TryFrom<i128> for Uint {
 impl From<u64> for Uint {
     fn from(x: u64) -> Self {
         if let Ok(x) = x.try_into() {
-            Uint(Left(x))
+            Uint::mk(Left(x))
         } else {
-            Uint(Right(Box::new(x.into())))
+            Uint::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -646,9 +716,9 @@ impl TryFrom<i64> for Uint {
     type Error = IntIsNegativeError;
     fn try_from(x: i64) -> Result<Self, Self::Error> {
         if let Ok(x) = x.try_into() {
-            Ok(Uint(Left(x)))
+            Ok(Uint::mk(Left(x)))
         } else {
-            Ok(Uint(Right(Box::new(
+            Ok(Uint::mk(Right(Box::new(
                 BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
             ))))
         }
@@ -657,9 +727,9 @@ impl TryFrom<i64> for Uint {
 impl From<u32> for Uint {
     fn from(x: u32) -> Self {
         if let Ok(x) = x.try_into() {
-            Uint(Left(x))
+            Uint::mk(Left(x))
         } else {
-            Uint(Right(Box::new(x.into())))
+            Uint::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -667,9 +737,9 @@ impl TryFrom<i32> for Uint {
     type Error = IntIsNegativeError;
     fn try_from(x: i32) -> Result<Self, Self::Error> {
         if let Ok(x) = x.try_into() {
-            Ok(Uint(Left(x)))
+            Ok(Uint::mk(Left(x)))
         } else {
-            Ok(Uint(Right(Box::new(
+            Ok(Uint::mk(Right(Box::new(
                 BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
             ))))
         }
@@ -679,9 +749,9 @@ impl TryFrom<i32> for Uint {
 impl From<u16> for Uint {
     fn from(x: u16) -> Self {
         if let Ok(x) = x.try_into() {
-            Uint(Left(x))
+            Uint::mk(Left(x))
         } else {
-            Uint(Right(Box::new(x.into())))
+            Uint::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -689,9 +759,9 @@ impl TryFrom<i16> for Uint {
     type Error = IntIsNegativeError;
     fn try_from(x: i16) -> Result<Self, Self::Error> {
         if let Ok(x) = x.try_into() {
-            Ok(Uint(Left(x)))
+            Ok(Uint::mk(Left(x)))
         } else {
-            Ok(Uint(Right(Box::new(
+            Ok(Uint::mk(Right(Box::new(
                 BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
             ))))
         }
@@ -701,9 +771,9 @@ impl TryFrom<i16> for Uint {
 impl From<u8> for Uint {
     fn from(x: u8) -> Self {
         if let Ok(x) = x.try_into() {
-            Uint(Left(x))
+            Uint::mk(Left(x))
         } else {
-            Uint(Right(Box::new(x.into())))
+            Uint::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -711,9 +781,9 @@ impl TryFrom<i8> for Uint {
     type Error = IntIsNegativeError;
     fn try_from(x: i8) -> Result<Self, Self::Error> {
         if let Ok(x) = x.try_into() {
-            Ok(Uint(Left(x)))
+            Ok(Uint::mk(Left(x)))
         } else {
-            Ok(Uint(Right(Box::new(
+            Ok(Uint::mk(Right(Box::new(
                 BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
             ))))
         }
@@ -723,9 +793,9 @@ impl TryFrom<i8> for Uint {
 impl From<usize> for Uint {
     fn from(x: usize) -> Self {
         if let Ok(x) = x.try_into() {
-            Uint(Left(x))
+            Uint::mk(Left(x))
         } else {
-            Uint(Right(Box::new(x.into())))
+            Uint::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -733,9 +803,9 @@ impl TryFrom<isize> for Uint {
     type Error = IntIsNegativeError;
     fn try_from(x: isize) -> Result<Self, Self::Error> {
         if let Ok(x) = x.try_into() {
-            Ok(Uint(Left(x)))
+            Ok(Uint::mk(Left(x)))
         } else {
-            Ok(Uint(Right(Box::new(
+            Ok(Uint::mk(Right(Box::new(
                 BigInt::from(x).to_biguint().ok_or(IntIsNegativeError())?,
             ))))
         }
@@ -745,44 +815,44 @@ impl TryFrom<isize> for Uint {
 impl FromPrimitive for Uint {
     fn from_u128(x: u128) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Uint(Left(x)))
+            Some(Uint::mk(Left(x)))
         } else {
-            Some(Uint(Right(Box::new(x.into()))))
+            Some(Uint::mk(Right(Box::new(x.into()))))
         }
     }
     fn from_i128(x: i128) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Uint(Left(x)))
+            Some(Uint::mk(Left(x)))
         } else {
-            Some(Uint(Right(Box::new(BigInt::from(x).to_biguint()?))))
+            Some(Uint::mk(Right(Box::new(BigInt::from(x).to_biguint()?))))
         }
     }
     fn from_u64(x: u64) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Uint(Left(x)))
+            Some(Uint::mk(Left(x)))
         } else {
-            Some(Uint(Right(Box::new(x.into()))))
+            Some(Uint::mk(Right(Box::new(x.into()))))
         }
     }
     fn from_i64(x: i64) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Uint(Left(x)))
+            Some(Uint::mk(Left(x)))
         } else {
-            Some(Uint(Right(Box::new(BigInt::from(x).to_biguint()?))))
+            Some(Uint::mk(Right(Box::new(BigInt::from(x).to_biguint()?))))
         }
     }
     fn from_u32(x: u32) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Uint(Left(x)))
+            Some(Uint::mk(Left(x)))
         } else {
-            Some(Uint(Right(Box::new(x.into()))))
+            Some(Uint::mk(Right(Box::new(x.into()))))
         }
     }
     fn from_i32(x: i32) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Uint(Left(x)))
+            Some(Uint::mk(Left(x)))
         } else {
-            Some(Uint(Right(Box::new(BigInt::from(x).to_biguint()?))))
+            Some(Uint::mk(Right(Box::new(BigInt::from(x).to_biguint()?))))
         }
     }
 }
@@ -790,54 +860,54 @@ impl FromPrimitive for Uint {
 impl From<u128> for Int {
     fn from(x: u128) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
 impl From<i128> for Int {
     fn from(x: i128) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
 impl From<u64> for Int {
     fn from(x: u64) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
 impl From<i64> for Int {
     fn from(x: i64) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
 impl From<u32> for Int {
     fn from(x: u32) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
 impl From<i32> for Int {
     fn from(x: i32) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -845,18 +915,18 @@ impl From<i32> for Int {
 impl From<u16> for Int {
     fn from(x: u16) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
 impl From<i16> for Int {
     fn from(x: i16) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -864,18 +934,18 @@ impl From<i16> for Int {
 impl From<u8> for Int {
     fn from(x: u8) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
 impl From<i8> for Int {
     fn from(x: i8) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -883,18 +953,18 @@ impl From<i8> for Int {
 impl From<usize> for Int {
     fn from(x: usize) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
 impl From<isize> for Int {
     fn from(x: isize) -> Self {
         if let Ok(x) = x.try_into() {
-            Int(Left(x))
+            Int::mk(Left(x))
         } else {
-            Int(Right(Box::new(x.into())))
+            Int::mk(Right(Box::new(x.into())))
         }
     }
 }
@@ -902,82 +972,82 @@ impl From<isize> for Int {
 impl FromPrimitive for Int {
     fn from_u128(x: u128) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Int(Left(x)))
+            Some(Int::mk(Left(x)))
         } else {
-            Some(Int(Right(Box::new(x.into()))))
+            Some(Int::mk(Right(Box::new(x.into()))))
         }
     }
     fn from_i128(x: i128) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Int(Left(x)))
+            Some(Int::mk(Left(x)))
         } else {
-            Some(Int(Right(Box::new(x.into()))))
+            Some(Int::mk(Right(Box::new(x.into()))))
         }
     }
     fn from_u64(x: u64) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Int(Left(x)))
+            Some(Int::mk(Left(x)))
         } else {
-            Some(Int(Right(Box::new(x.into()))))
+            Some(Int::mk(Right(Box::new(x.into()))))
         }
     }
     fn from_i64(x: i64) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Int(Left(x)))
+            Some(Int::mk(Left(x)))
         } else {
-            Some(Int(Right(Box::new(x.into()))))
+            Some(Int::mk(Right(Box::new(x.into()))))
         }
     }
     fn from_u32(x: u32) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Int(Left(x)))
+            Some(Int::mk(Left(x)))
         } else {
-            Some(Int(Right(Box::new(x.into()))))
+            Some(Int::mk(Right(Box::new(x.into()))))
         }
     }
     fn from_i32(x: i32) -> Option<Self> {
         if let Ok(x) = x.try_into() {
-            Some(Int(Left(x)))
+            Some(Int::mk(Left(x)))
         } else {
-            Some(Int(Right(Box::new(x.into()))))
+            Some(Int::mk(Right(Box::new(x.into()))))
         }
     }
 }
 
 impl ToPrimitive for Int {
     fn to_u128(&self) -> Option<u128> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_u128(),
         }
     }
     fn to_i128(&self) -> Option<i128> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_i128(),
         }
     }
     fn to_u64(&self) -> Option<u64> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_u64(),
         }
     }
     fn to_i64(&self) -> Option<i64> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_i64(),
         }
     }
     fn to_u32(&self) -> Option<u32> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_u32(),
         }
     }
     fn to_i32(&self) -> Option<i32> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_i32(),
         }
     }
@@ -985,38 +1055,38 @@ impl ToPrimitive for Int {
 
 impl ToPrimitive for Uint {
     fn to_u128(&self) -> Option<u128> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_u128(),
         }
     }
     fn to_i128(&self) -> Option<i128> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_i128(),
         }
     }
     fn to_u64(&self) -> Option<u64> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_u64(),
         }
     }
     fn to_i64(&self) -> Option<i64> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_i64(),
         }
     }
     fn to_u32(&self) -> Option<u32> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_u32(),
         }
     }
     fn to_i32(&self) -> Option<i32> {
-        match &self.0 {
-            Left(x) => (*x).try_into().ok(),
+        match self.0.get_ref() {
+            Left(x) => x.try_into().ok(),
             Right(b) => b.to_i32(),
         }
     }
@@ -1104,23 +1174,23 @@ macro_rules! call_with_cow_permutations {
     // Also, calls macros to implement AddAssign<Int> and AddAssign<&Int>.
     ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:tt, $bigtype:tt, self case) => {
         $macroname_value!{
-            $type, $basetype, $bigtype, self, v, $type, $type, &v.0, {},
+            $type, $basetype, $bigtype, self, v, $type, $type, v.get_ref(), {},
             $bigtype::from(self), $bigtype::from(v)
         }
         $macroname_value!{
-            $type, $basetype, $bigtype, self, v, $type, &$type, &v.0, {
+            $type, $basetype, $bigtype, self, v, $type, &$type, v.get_ref(), {
                 let v1 = v.cow_big()
                 let v2: &$bigtype = v1.deref()
             }, $bigtype::from(self), v2
         }
         $macroname_value!{
-            $type, $basetype, $bigtype, self, v, &$type, $type, &v.0, {
+            $type, $basetype, $bigtype, self, v, &$type, $type, v.get_ref(), {
                 let self1 = self.cow_big()
                 let self2: &$bigtype = self1.deref()
             }, self2, $bigtype::from(v)
         }
         $macroname_value!{
-            $type, $basetype, $bigtype, self, v, &$type, &$type, &v.0, {
+            $type, $basetype, $bigtype, self, v, &$type, &$type, v.get_ref(), {
                 let self1 = self.cow_big()
                 let self2: &$bigtype = self1.deref()
                 let v1 = v.cow_big()
@@ -1135,21 +1205,21 @@ macro_rules! call_with_cow_permutations {
     // that first call $bigtype::from(..) on the i128 to convert to &Int.
     ($macroname_value:ident, $macroname_mut:ident, $type:tt, $basetype:ty, $bigtype:tt, base type $baseothertype:ty) => {
         $macroname_value!{
-            $type, $basetype, $bigtype, self, v, $type, $baseothertype, Either::<&$baseothertype, $type>::Left(&v), {},
+            $type, $basetype, $bigtype, self, v, $type, $baseothertype, Either::<$baseothertype, $type>::Left(v), {},
             $bigtype::from(self), v
         }
         $macroname_value!{
-            $type, $basetype, $bigtype, self, v, $type, &$baseothertype, Either::<&$baseothertype, $type>::Left(v), {},
+            $type, $basetype, $bigtype, self, v, $type, &$baseothertype, Either::<$baseothertype, $type>::Left(*v), {},
             $bigtype::from(self), *v
         }
         $macroname_value!{
-            $type, $basetype, $bigtype, self, v, &$type, $baseothertype, Either::<&$baseothertype, $type>::Left(&v), {
+            $type, $basetype, $bigtype, self, v, &$type, $baseothertype, Either::<$baseothertype, $type>::Left(v), {
                 let self1 = self.cow_big()
                 let self2: &$bigtype = self1.deref()
             }, self2, v
         }
         $macroname_value!{
-            $type, $basetype, $bigtype, self, v, &$type, &$baseothertype, Either::<&$baseothertype, $type>::Left(v), {
+            $type, $basetype, $bigtype, self, v, &$type, &$baseothertype, Either::<$baseothertype, $type>::Left(*v), {
                 let self1 = self.cow_big()
                 let self2: &$bigtype = self1.deref()
             }, self2, *v
@@ -1166,9 +1236,9 @@ macro_rules! trait_add_value {
             impl Add<$othtype> for $selftype {
                 type Output = $type;
                 fn add($selfvar, $othvar: $othtype) -> $type {
-                    if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
-                        if let Ok(y_base) = <$basetype>::try_from(*y) {
-                            if let Some(z) = <$basetype>::checked_add(*x, y_base) {
+                    if let (Left(x), Left(y)) = ($selfvar.get_ref(), $otheitherref) {
+                        if let Ok(y_base) = <$basetype>::try_from(y) {
+                            if let Some(z) = <$basetype>::checked_add(x, y_base) {
                                 return $type::small(z);
                             }
                         }
@@ -1200,9 +1270,9 @@ macro_rules! trait_div_value {
         impl Div<$othtype> for $selftype {
             type Output = $type;
             fn div($selfvar, $othvar: $othtype) -> $type {
-                if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
-                    if let Ok(y_base) = <$basetype>::try_from(*y) {
-                        if let Some(z) = <$basetype>::checked_div(*x, y_base) {
+                if let (Left(x), Left(y)) = ($selfvar.get_ref(), $otheitherref) {
+                    if let Ok(y_base) = <$basetype>::try_from(y) {
+                        if let Some(z) = <$basetype>::checked_div(x, y_base) {
                             return $type::small(z);
                         }
                     }
@@ -1234,9 +1304,9 @@ macro_rules! trait_mul_value {
         impl Mul<$othtype> for $selftype {
             type Output = $type;
             fn mul($selfvar, $othvar: $othtype) -> $type {
-                if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
-                    if let Ok(y_base) = <$basetype>::try_from(*y) {
-                        if let Some(z) = <$basetype>::checked_mul(*x, y_base) {
+                if let (Left(x), Left(y)) = ($selfvar.get_ref(), $otheitherref) {
+                    if let Ok(y_base) = <$basetype>::try_from(y) {
+                        if let Some(z) = <$basetype>::checked_mul(x, y_base) {
                             return $type::small(z);
                         }
                     }
@@ -1268,9 +1338,9 @@ macro_rules! trait_rem_value {
         impl Rem<$othtype> for $selftype {
             type Output = $type;
             fn rem($selfvar, $othvar: $othtype) -> $type {
-                if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
-                    if let Ok(y_base) = <$basetype>::try_from(*y) {
-                        if let Some(z) = <$basetype>::checked_rem(*x, y_base) {
+                if let (Left(x), Left(y)) = ($selfvar.get_ref(), $otheitherref) {
+                    if let Ok(y_base) = <$basetype>::try_from(y) {
+                        if let Some(z) = <$basetype>::checked_rem(x, y_base) {
                             return $type::small(z);
                         }
                     }
@@ -1302,9 +1372,9 @@ macro_rules! trait_sub_value {
         impl Sub<$othtype> for $selftype {
             type Output = $type;
             fn sub($selfvar, $othvar: $othtype) -> $type {
-                if let (Left(x), Left(y)) = (&$selfvar.0, $otheitherref) {
-                    if let Ok(y_base) = <$basetype>::try_from(*y) {
-                        if let Some(z) = <$basetype>::checked_sub(*x, y_base) {
+                if let (Left(x), Left(y)) = ($selfvar.get_ref(), $otheitherref) {
+                    if let Ok(y_base) = <$basetype>::try_from(y) {
+                        if let Some(z) = <$basetype>::checked_sub(x, y_base) {
                             return $type::small(z);
                         }
                     }
@@ -1339,7 +1409,7 @@ macro_rules! checked_trait {
         impl $trait for $type {
             fn $method(&self, other: &Self) -> Option<Self> {
                 // Try to do it on the base type.
-                if let (Left(x), Left(y)) = (&self.0, &other.0) {
+                if let (Left(x), Left(y)) = (self.get_ref(), other.get_ref()) {
                     if let Some(res) = x.$method(y) {
                         return Some($type::small(res));
                     }
@@ -1460,6 +1530,8 @@ mod test {
     use super::*;
     #[test]
     fn test_unsigned() {
+        println!("Size of Uint: {}", std::mem::size_of::<Uint>());
+
         let eleven = Uint::small(11);
         assert_eq!(eleven, 11u8);
         assert_eq!(&eleven, 11u8);
@@ -1471,9 +1543,9 @@ mod test {
         assert_ne!(eleven, 10i8);
         assert_eq!(11i8, eleven);
         assert_ne!(10i8, eleven);
-        assert!(eleven.0.is_left());
-        assert!(eleven.clone().0.is_left());
-        assert!(eleven.clone().normalize().0.is_left());
+        assert!(eleven.get_ref().is_left());
+        assert!(eleven.clone().get_ref().is_left());
+        assert!(eleven.clone().normalize().get_ref().is_left());
 
         let eleven_pow11 = &eleven
             * &eleven
@@ -1486,9 +1558,9 @@ mod test {
             * &eleven
             * &eleven
             * &eleven;
-        assert!(eleven_pow11.0.is_right());
-        assert!(eleven_pow11.clone().0.is_right());
-        assert!(eleven_pow11.clone().normalize().0.is_right());
+        assert!(eleven_pow11.get_ref().is_right());
+        assert!(eleven_pow11.clone().get_ref().is_right());
+        assert!(eleven_pow11.clone().normalize().get_ref().is_right());
         assert!(eleven < eleven_pow11);
         assert!(&eleven < eleven_pow11);
         assert!(eleven < &eleven_pow11);
@@ -1516,6 +1588,8 @@ mod test {
     }
     #[test]
     fn test_signed() {
+        println!("Size of Int: {}", std::mem::size_of::<Int>());
+
         let eleven = Int::small(11);
         assert_eq!(eleven, 11u8);
         assert_eq!(&eleven, 11u8);
@@ -1527,9 +1601,9 @@ mod test {
         assert_ne!(eleven, 10i8);
         assert_eq!(11i8, eleven);
         assert_ne!(10i8, eleven);
-        assert!(eleven.0.is_left());
-        assert!(eleven.clone().0.is_left());
-        assert!(eleven.clone().normalize().0.is_left());
+        assert!(eleven.get_ref().is_left());
+        assert!(eleven.clone().get_ref().is_left());
+        assert!(eleven.clone().normalize().get_ref().is_left());
 
         let eleven_pow11 = &eleven
             * &eleven
@@ -1542,9 +1616,9 @@ mod test {
             * &eleven
             * &eleven
             * &eleven;
-        assert!(eleven_pow11.0.is_right());
-        assert!(eleven_pow11.clone().0.is_right());
-        assert!(eleven_pow11.clone().normalize().0.is_right());
+        assert!(eleven_pow11.get_ref().is_right());
+        assert!(eleven_pow11.clone().get_ref().is_right());
+        assert!(eleven_pow11.clone().normalize().get_ref().is_right());
         assert!(eleven < eleven_pow11);
         assert!(&eleven < eleven_pow11);
         assert!(eleven < &eleven_pow11);

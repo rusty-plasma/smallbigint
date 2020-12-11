@@ -3,35 +3,19 @@
 [![Docs.rs link](https://docs.rs/smallbigint/badge.svg)](https://docs.rs/smallbigint)
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 
-A wrapper around `num_bigint::BigUint` and `num_bigint::BigInt` that
-stays out of the heap for small values.
+Two types, `Uint` and `Int`, like `smallvec` for big integers. Anything that fits in 32 bits stays on the stack. Numbers that don't fit are stored in a `Box<num_bigint::BigUint>` / `Box<num_bigint::BigInt>`.
 
-In the current implementation, we go to the heap for anything that
-doesn't fit in 32 bits.
+On 64-bit architectures, by default we use `unsafe` to compress the types to 8 bytes, exploiting pointer alignment. This behavior is triggered by the `unsafe-opt` feature, which is enabled by default.
 
-This crate already has a lot of relevant methods, but it is not really complete
-yet. Patches are welcome!
+## Implemented traits
 
-## To do, and important:
+Most important numeric traits have been implemented. Here are some that aren't yet; pull requests are welcome!
 
-- Implement `std::fmt::{Binary, LowerHex, Octal, UpperHex}` (easy?)
-- Implement `num_bigint::{ToBigInt, ToBigUint}`
-
-## Other traits and methods still to be implemented:
-
+- `std::fmt::{Binary, LowerHex, Octal, UpperHex}`
 - Bit operations
-- `num_traits::Num` (easy?)
-- `num_traits::Signed`
-- `num_traits::Unsigned`
-- `num_integer::Integer`
-- `num_integer::Roots`
-- `std::iter::Product`
-- `std::iter::Sum`
-- Other methods implemented directly on BigInt, BigUint
-
-## Not done and seems hard:
-
-- `num_traits::pow::Pow`
+- `num_traits::Num`, `num_traits::Signed`, `num_traits::Unsigned`, `num_integer::Integer`, `num_integer::Roots`, `std::iter::Product`, `std::iter::Sum`, `num_traits::pow::Pow`
+- Other methods implemented directly on `BigInt`, `BigUint`
+- Implement `num_bigint::{ToBigInt, ToBigUint}`
 
 # License
 

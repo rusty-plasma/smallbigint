@@ -13,9 +13,21 @@ jobs:
       run: cargo build --all-targets
     - name: Run tests
       run: cargo test --all-targets
+    - name: Run tests for unsafe configuration (default)
+      run: cargo test --all-targets --features unsafe-opt
+    - name: Run tests for no-unsafe configuration
+      run: cargo test --all-targets --no-default-features
     - name: Clippy
       run: cargo clippy --all-targets -- -D warnings -D clippy::all -D clippy::cargo
     - name: Check for correct formatting
       run: cargo fmt -- --check --files-with-diff
     - name: Cargo audit
       run: bash -c 'which cargo-audit || cargo install cargo-audit; cargo audit --deny-warnings'
+
+    # Ideally we could run the benchmarks here, but that still requires nightly, which
+    # is hard to get on GitHub Actions.
+    #
+    # - name: Run benchmarks for unsafe configuration
+    #   run: cargo +nightly bench --features unsafe-opt,bench --no-default-features --examples
+    # - name: Run benchmarks for no-safe configuration
+    #   run: cargo +nightly bench --features bench --no-default-features --examples
