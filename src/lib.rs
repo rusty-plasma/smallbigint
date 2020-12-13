@@ -11,7 +11,6 @@
 //! Most important numeric traits have been implemented. Here are some that aren't yet;
 //! pull requests are welcome!
 //!
-//! - [`std::fmt::{Binary, LowerHex, Octal, UpperHex}`]
 //! - Bit operations
 //! - [`num_traits::Num`], [`num_traits::Signed`], [`num_traits::Unsigned`],
 //!   [`num_integer::Integer`], [`num_integer::Roots`], [`std::iter::Product`],
@@ -38,7 +37,7 @@ use num_traits::{
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::cmp::Ordering;
 use std::convert::{From, Into, TryFrom, TryInto};
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::{
     Add, AddAssign, Deref, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
@@ -272,6 +271,80 @@ impl Int {
     }
 }
 
+// Convenience private trait to make the code easier to write
+
+trait SmallBig {
+    type Big;
+    type Small;
+
+    fn make_left(i: Self::Small) -> Self;
+    fn mk(v: Either<Self::Small, Box<Self::Big>>) -> Self;
+    fn get(self) -> Either<Self::Small, Box<Self::Big>>;
+    fn get_ref(&self) -> Either<Self::Small, &Self::Big>;
+    fn zero() -> Self;
+    fn small(x: Self::Small) -> Self;
+    fn big(v: Self::Big) -> Self;
+    fn into_big(self) -> Self::Big;
+}
+
+impl SmallBig for Uint {
+    type Big = BigUint;
+    type Small = u32;
+
+    fn make_left(i: Self::Small) -> Self {
+        Self::make_left(i)
+    }
+    fn mk(v: Either<Self::Small, Box<Self::Big>>) -> Self {
+        Self::mk(v)
+    }
+    fn get(self) -> Either<Self::Small, Box<Self::Big>> {
+        self.get()
+    }
+    fn get_ref(&self) -> Either<Self::Small, &Self::Big> {
+        self.get_ref()
+    }
+    fn zero() -> Self {
+        Self::zero()
+    }
+    fn small(x: Self::Small) -> Self {
+        Self::small(x)
+    }
+    fn big(v: Self::Big) -> Self {
+        Self::big(v)
+    }
+    fn into_big(self) -> Self::Big {
+        self.into()
+    }
+}
+impl SmallBig for Int {
+    type Big = BigInt;
+    type Small = i32;
+
+    fn make_left(i: Self::Small) -> Self {
+        Self::make_left(i)
+    }
+    fn mk(v: Either<Self::Small, Box<Self::Big>>) -> Self {
+        Self::mk(v)
+    }
+    fn get(self) -> Either<Self::Small, Box<Self::Big>> {
+        self.get()
+    }
+    fn get_ref(&self) -> Either<Self::Small, &Self::Big> {
+        self.get_ref()
+    }
+    fn zero() -> Self {
+        Self::zero()
+    }
+    fn small(x: Self::Small) -> Self {
+        Self::small(x)
+    }
+    fn big(v: Self::Big) -> Self {
+        Self::big(v)
+    }
+    fn into_big(self) -> Self::Big {
+        self.into()
+    }
+}
 // -- Basic stuff between the same signedness --
 
 impl Default for Uint {
@@ -334,35 +407,58 @@ impl<T: Default> Transformable for T {
     }
 }
 
-impl Display for Uint {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.0.get_ref() {
-            Left(x) => Display::fmt(&x, f),
-            Right(b) => Display::fmt(b, f),
+macro_rules! call_with_args {
+    ($macroname:tt, $baseargs:tt, [$($nextarg:tt),*]) => {
+        $(append_macro_call!{$macroname, $baseargs, $nextarg})*
+    };
+}
+
+macro_rules! append_macro_call {
+    ($macroname:tt, ($($baseargs:tt)*), $nextarg:tt) => {
+        $macroname!($($baseargs)* $nextarg)
+    };
+    ($macroname:tt, [$($baseargs:tt)*], $nextarg:tt) => {
+        $macroname![$($baseargs)* $nextarg]
+    };
+    ($macroname:tt, {$($baseargs:tt)*}, $nextarg:tt) => {
+        $macroname!{$($baseargs)* $nextarg}
+    };
+}
+
+macro_rules! impl_fmt_variants {
+    // Here we implement stuff like
+    //
+    //   - PartialEq<&i16> for Int
+    //   - PartialEq<i16> for &Int
+    //
+    // so that you don't have to call the * operator yourself as much. But we
+    // don't implement PartialEq<&i16> for &Int because the generic implementation
+    // already takes care of that.
+    //
+    // These functions are very simple (a dereference and a function call), so it
+    // seems reasonable to suggest that they should be inlined.
+    ($trait:path, $selftype:ty) => {
+        impl $trait for $selftype {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self.0.get_ref() {
+                    Left(x) => <<$selftype as SmallBig>::Small as $trait>::fmt(&x, f),
+                    Right(b) => <<$selftype as SmallBig>::Big as $trait>::fmt(b, f),
+                }
+            }
         }
-    }
+    };
 }
 
-impl Display for Int {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.0.get_ref() {
-            Left(x) => Display::fmt(&x, f),
-            Right(b) => Display::fmt(b, f),
-        }
-    }
-}
+call_with_args! {impl_fmt_variants, {std::fmt::Binary, }, [Uint, Int]}
+call_with_args! {impl_fmt_variants, {std::fmt::Debug, }, [Uint, Int]}
+call_with_args! {impl_fmt_variants, {std::fmt::Display, }, [Uint, Int]}
+call_with_args! {impl_fmt_variants, {std::fmt::LowerHex, }, [Uint, Int]}
+call_with_args! {impl_fmt_variants, {std::fmt::Octal, }, [Uint, Int]}
+call_with_args! {impl_fmt_variants, {std::fmt::UpperHex, }, [Uint, Int]}
 
-impl Debug for Uint {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        Display::fmt(self, f)
-    }
-}
-
-impl Debug for Int {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        Display::fmt(self, f)
-    }
-}
+// Not yet implemented upstream:
+// call_with_args! {impl_fmt_variants, {std::fmt::LowerExp, }, [Uint, Int]}
+// call_with_args! {impl_fmt_variants, {std::fmt::UpperExp, }, [Uint, Int]}
 
 impl From<BigUint> for Uint {
     fn from(v: BigUint) -> Self {
@@ -1427,24 +1523,6 @@ macro_rules! checked_trait {
     };
 }
 
-macro_rules! call_with_args {
-    ($macroname:tt, $baseargs:tt, [$($nextarg:tt),*]) => {
-        $(append_macro_call!{$macroname, $baseargs, $nextarg})*
-    };
-}
-
-macro_rules! append_macro_call {
-    ($macroname:tt, ($($baseargs:tt)*), $nextarg:tt) => {
-        $macroname!($($baseargs)* $nextarg)
-    };
-    ($macroname:tt, [$($baseargs:tt)*], $nextarg:tt) => {
-        $macroname![$($baseargs)* $nextarg]
-    };
-    ($macroname:tt, {$($baseargs:tt)*}, $nextarg:tt) => {
-        $macroname!{$($baseargs)* $nextarg}
-    };
-}
-
 call_with_args! {checked_trait, {CheckedAdd, checked_add, }, [Uint, Int]}
 call_with_args! {checked_trait, {CheckedDiv, checked_div, }, [Uint, Int]}
 call_with_args! {checked_trait, {CheckedMul, checked_mul, }, [Uint, Int]}
@@ -1527,6 +1605,7 @@ call_with_all_signed_base_types!(trait_partialord_straight, Int);
 #[cfg(test)]
 mod test {
     #![allow(clippy::redundant_clone, clippy::cognitive_complexity, clippy::op_ref)]
+
     use super::*;
     #[test]
     fn test_unsigned() {
@@ -1585,6 +1664,25 @@ mod test {
             &eleven_pow11 + &eleven_pow11,
             eleven_pow11.checked_add(&eleven_pow11).unwrap()
         );
+
+        for x in &[
+            &eleven,
+            &eleven_pow11,
+            &eleven_big,
+            &eleven_big_norm,
+            &eleven_big_norm_ref,
+        ] {
+            let x_big: BigUint = (*x).clone().into_big();
+
+            assert_eq!(format!("{}", x), format!("{}", x_big),);
+            assert_eq!(format!("{:3.2}", x), format!("{:3.2}", x_big),);
+            assert_eq!(format!("{:b}", x), format!("{:b}", x_big),);
+            assert_eq!(format!("{:3.2b}", x), format!("{:3.2b}", x_big),);
+            assert_eq!(format!("{:x}", x), format!("{:x}", x_big),);
+            assert_eq!(format!("{:3.2x}", x), format!("{:3.2x}", x_big),);
+            assert_eq!(format!("{:o}", x), format!("{:o}", x_big),);
+            assert_eq!(format!("{:3.2o}", x), format!("{:3.2o}", x_big),);
+        }
     }
     #[test]
     fn test_signed() {
@@ -1649,5 +1747,24 @@ mod test {
             &eleven_pow11 + &eleven_pow11,
             eleven_pow11.checked_add(&eleven_pow11).unwrap()
         );
+
+        for x in &[
+            &eleven,
+            &eleven_pow11,
+            &eleven_big,
+            &eleven_big_norm,
+            &eleven_big_norm_ref,
+        ] {
+            let x_big: BigInt = (*x).clone().into_big();
+
+            assert_eq!(format!("{}", x), format!("{}", x_big),);
+            assert_eq!(format!("{:3.2}", x), format!("{:3.2}", x_big),);
+            assert_eq!(format!("{:b}", x), format!("{:b}", x_big),);
+            assert_eq!(format!("{:3.2b}", x), format!("{:3.2b}", x_big),);
+            assert_eq!(format!("{:x}", x), format!("{:x}", x_big),);
+            assert_eq!(format!("{:3.2x}", x), format!("{:3.2x}", x_big),);
+            assert_eq!(format!("{:o}", x), format!("{:o}", x_big),);
+            assert_eq!(format!("{:3.2o}", x), format!("{:3.2o}", x_big),);
+        }
     }
 }

@@ -11,7 +11,6 @@ On 64-bit architectures, by default we use `unsafe` to compress the types to 8 b
 
 Most important numeric traits have been implemented. Here are some that aren't yet; pull requests are welcome!
 
-- `std::fmt::{Binary, LowerHex, Octal, UpperHex}`
 - Bit operations
 - `num_traits::Num`, `num_traits::Signed`, `num_traits::Unsigned`, `num_integer::Integer`, `num_integer::Roots`, `std::iter::Product`, `std::iter::Sum`, `num_traits::pow::Pow`
 - Other methods implemented directly on `BigInt`, `BigUint`
