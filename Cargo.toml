@@ -14,11 +14,11 @@ keywords = ["bigint", "integer", "number"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-num-bigint = "0.2.6"
+num-bigint = "0.3"
 num-traits = "0.2.11"
 either = "1.5.3"
 num-integer = "0.1.42"
-cfg-if = "0.1.10"
+cfg-if = "1.0.0"
 
 [dev-dependencies]
 num-iter = "0.1.40"
